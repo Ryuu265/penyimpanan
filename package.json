@@ -2,6 +2,11 @@
   "name": "pusat-data-perencanaan",
   "private": true,
   "version": "1.0.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+
   "scripts": {
     "dev": "concurrently -n \"server,client\" -c \"blue,green\" \"node server/index.js\" \"vite\"",
     "client": "vite",
