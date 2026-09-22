@@ -42,12 +42,13 @@ app.use('/api', (req, res) => {
 const distPath = path.join(__dirname, '..', 'dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-  // Catch-all: kembalikan index.html untuk Vue Router (SPA)
-  app.get('*', (req, res) => {
+  // Catch-all: kembalikan index.html untuk Vue Router SPA
+  // Gunakan app.use() agar kompatibel dengan Express 4 & 5
+  app.use((req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 } else {
-  app.get('/', (req, res) => {
+  app.use((req, res) => {
     res.json({ message: 'Pusat Data Bapperida API. Frontend belum di-build.' });
   });
 }
