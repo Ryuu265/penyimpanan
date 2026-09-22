@@ -20,6 +20,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     nama TEXT NOT NULL,
+    username TEXT UNIQUE,
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
     role TEXT NOT NULL CHECK(role IN ('SUPER_ADMIN','ADMIN_BIDANG','VIEWER')),
@@ -67,12 +68,19 @@ db.exec(`
   );
 `);
 
-// Migrasi aman untuk database yang sudah ada jika belum ada kolom tahapan_id
+// Migrasi aman untuk database yang sudah ada
 try {
   db.prepare("ALTER TABLE drive_links ADD COLUMN tahapan_id TEXT REFERENCES tahapan(id) ON DELETE SET NULL").run();
-} catch (err) {
-  // Kolom sudah ada
-}
+} catch (err) { /* Kolom sudah ada */ }
+
+try {
+  db.prepare("ALTER TABLE users ADD COLUMN username TEXT").run();
+} catch (err) { /* Kolom sudah ada */ }
+
+// Buat index unik username (ignore jika sudah ada)
+try {
+  db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL").run();
+} catch (err) { /* Index sudah ada */ }
 
 // Seed data jika belum ada
 function seed() {
@@ -92,17 +100,17 @@ function seed() {
   const hashAdmin2 = bcrypt.hashSync('admin123', 10);
   const hashViewer = bcrypt.hashSync('viewer123', 10);
 
-  db.prepare('INSERT OR IGNORE INTO users (id, nama, email, password, role, bidang_id) VALUES (?,?,?,?,?,?)').run(
-    'user-super-001', 'Super Admin', 'superadmin@bapperida.go.id', hashSuperAdmin, 'SUPER_ADMIN', null
+  db.prepare('INSERT OR IGNORE INTO users (id, nama, username, email, password, role, bidang_id) VALUES (?,?,?,?,?,?,?)').run(
+    'user-super-001', 'Super Admin', 'superadmin', 'superadmin@bapperida.go.id', hashSuperAdmin, 'SUPER_ADMIN', null
   );
-  db.prepare('INSERT OR IGNORE INTO users (id, nama, email, password, role, bidang_id) VALUES (?,?,?,?,?,?)').run(
-    'user-admin-perencanaan', 'Admin Perencanaan', 'admin.perencanaan@bapperida.go.id', hashAdmin1, 'ADMIN_BIDANG', bidang1Id
+  db.prepare('INSERT OR IGNORE INTO users (id, nama, username, email, password, role, bidang_id) VALUES (?,?,?,?,?,?,?)').run(
+    'user-admin-perencanaan', 'Admin Perencanaan', 'admin.perencanaan', 'admin.perencanaan@bapperida.go.id', hashAdmin1, 'ADMIN_BIDANG', bidang1Id
   );
-  db.prepare('INSERT OR IGNORE INTO users (id, nama, email, password, role, bidang_id) VALUES (?,?,?,?,?,?)').run(
-    'user-admin-palev', 'Admin Palev', 'admin.palev@bapperida.go.id', hashAdmin2, 'ADMIN_BIDANG', bidang2Id
+  db.prepare('INSERT OR IGNORE INTO users (id, nama, username, email, password, role, bidang_id) VALUES (?,?,?,?,?,?,?)').run(
+    'user-admin-palev', 'Admin Palev', 'admin.palev', 'admin.palev@bapperida.go.id', hashAdmin2, 'ADMIN_BIDANG', bidang2Id
   );
-  db.prepare('INSERT OR IGNORE INTO users (id, nama, email, password, role, bidang_id) VALUES (?,?,?,?,?,?)').run(
-    'user-viewer-001', 'Pegawai Umum', 'pegawai@bapperida.go.id', hashViewer, 'VIEWER', null
+  db.prepare('INSERT OR IGNORE INTO users (id, nama, username, email, password, role, bidang_id) VALUES (?,?,?,?,?,?,?)').run(
+    'user-viewer-001', 'Pegawai Umum', 'pegawai', 'pegawai@bapperida.go.id', hashViewer, 'VIEWER', null
   );
 
   // Seed mock drive links untuk Perencanaan
@@ -177,8 +185,23 @@ function seedSettings() {
   }
 }
 
+// Backfill username untuk akun lama yang belum punya username
+function migrateUsername() {
+  const defaults = [
+    { id: 'user-super-001', username: 'superadmin' },
+    { id: 'user-admin-perencanaan', username: 'admin.perencanaan' },
+    { id: 'user-admin-palev', username: 'admin.palev' },
+    { id: 'user-viewer-001', username: 'pegawai' },
+  ];
+  const stmt = db.prepare('UPDATE users SET username = ? WHERE id = ? AND (username IS NULL OR username = \'\')');
+  for (const u of defaults) {
+    stmt.run(u.username, u.id);
+  }
+}
+
 seed();
 seedTahapan();
 seedSettings();
+migrateUsername();
 
 module.exports = db;

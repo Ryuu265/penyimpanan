@@ -17,13 +17,13 @@
       <!-- Form -->
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
-          <label for="email">Email</label>
+          <label for="username">Username</label>
           <input
-            id="email"
-            v-model="form.email"
-            type="email"
-            placeholder="email@bapperida.go.id"
-            autocomplete="email"
+            id="username"
+            v-model="form.username"
+            type="text"
+            placeholder="contoh: superadmin"
+            autocomplete="username"
             required
             :disabled="loading"
           />
@@ -76,7 +76,7 @@ import { useAuthStore } from '../stores/auth'
 const router = useRouter()
 const authStore = useAuthStore()
 
-const form = ref({ email: '', password: '' })
+const form = ref({ username: '', password: '' })
 const showPassword = ref(false)
 const loading = ref(false)
 const errorMsg = ref('')
@@ -84,7 +84,7 @@ const errorMsg = ref('')
 async function handleLogin() {
   errorMsg.value = ''
   loading.value = true
-  const result = await authStore.login(form.value.email, form.value.password)
+  const result = await authStore.login(form.value.username, form.value.password)
   loading.value = false
   if (result.success) {
     router.push('/dashboard/perencanaan')

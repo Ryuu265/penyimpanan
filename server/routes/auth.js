@@ -4,21 +4,21 @@ const db = require('../db');
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../middleware/auth');
 
-// POST /api/auth/login
+// POST /api/auth/login — login dengan username
 router.post('/login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email dan password harus diisi.' });
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username dan password harus diisi.' });
   }
 
   const user = db.prepare(`
     SELECT u.*, b.nama_bidang FROM users u
     LEFT JOIN bidang b ON u.bidang_id = b.id
-    WHERE u.email = ? AND u.active = 1
-  `).get(email);
+    WHERE u.username = ? AND u.active = 1
+  `).get(username);
 
   if (!user) {
-    return res.status(401).json({ error: 'Email tidak ditemukan atau akun dinonaktifkan.' });
+    return res.status(401).json({ error: 'Username tidak ditemukan atau akun dinonaktifkan.' });
   }
 
   const valid = bcrypt.compareSync(password, user.password);
@@ -32,6 +32,7 @@ router.post('/login', (req, res) => {
     user: {
       id: user.id,
       nama: user.nama,
+      username: user.username,
       email: user.email,
       role: user.role,
       bidang_id: user.bidang_id,
@@ -40,10 +41,10 @@ router.post('/login', (req, res) => {
   });
 });
 
-// POST /api/auth/me - verify token & get current user info
+// GET /api/auth/me - verify token & get current user info
 router.get('/me', require('../middleware/auth').verifyToken, (req, res) => {
   const user = db.prepare(`
-    SELECT u.id, u.nama, u.email, u.role, u.bidang_id, b.nama_bidang
+    SELECT u.id, u.nama, u.username, u.email, u.role, u.bidang_id, b.nama_bidang
     FROM users u LEFT JOIN bidang b ON u.bidang_id = b.id
     WHERE u.id = ?
   `).get(req.user.id);

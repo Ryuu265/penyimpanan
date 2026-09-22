@@ -69,17 +69,17 @@
           <thead>
             <tr>
               <th>Nama</th>
-              <th>Email</th>
+              <th>Username</th>
               <th>Role</th>
               <th>Bidang</th>
               <th>Status</th>
-              <th style="text-align:right;">Aksi</th>
+              <th style="text-align:right">Aksi</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="u in users" :key="u.id">
               <td><strong>{{ u.nama }}</strong></td>
-              <td class="caption">{{ u.email }}</td>
+              <td class="caption"><code style="font-size:0.8rem;background:var(--color-bg);padding:0.1rem 0.35rem;border-radius:4px;border:1px solid var(--color-border);">{{ u.username || '—' }}</code></td>
               <td>
                 <span class="badge" :class="roleBadgeClass(u.role)">{{ roleLabel(u.role) }}</span>
               </td>
@@ -273,8 +273,9 @@
               <input v-model="userForm.nama" placeholder="Nama Lengkap" required />
             </div>
             <div class="form-group">
-              <label>Email *</label>
-              <input v-model="userForm.email" type="email" placeholder="email@bapperida.go.id" required />
+              <label>Username * <span class="caption">(dipakai untuk login)</span></label>
+              <input v-model="userForm.username" placeholder="contoh: budi.santoso" required
+                pattern="[a-zA-Z0-9._-]+" title="Hanya huruf, angka, titik, underscore, dan strip" />
             </div>
             <div v-if="!editingUser" class="form-group">
               <label>Password *</label>
@@ -411,7 +412,8 @@ const bidangForm = ref({ nama_bidang: '' })
 
 const showUserModal = ref(false)
 const editingUser = ref(null)
-const userForm = ref({ nama: '', email: '', password: '', role: 'VIEWER', bidang_id: '', active: true })
+const userForm = ref({ nama: '', username: '', password: '', role: 'VIEWER', bidang_id: '', active: true })
+
 
 const resetPasswordUser = ref(null)
 const newPassword = ref('')
@@ -533,8 +535,8 @@ async function deleteBidang(b) {
 function openUserModal(u = null) {
   editingUser.value = u
   userForm.value = u
-    ? { nama: u.nama, email: u.email, password: '', role: u.role, bidang_id: u.bidang_id || '', active: !!u.active }
-    : { nama: '', email: '', password: '', role: 'VIEWER', bidang_id: '', active: true }
+    ? { nama: u.nama, username: u.username || '', password: '', role: u.role, bidang_id: u.bidang_id || '', active: !!u.active }
+    : { nama: '', username: '', password: '', role: 'VIEWER', bidang_id: '', active: true }
   formError.value = ''
   showUserModal.value = true
 }
@@ -544,6 +546,8 @@ async function submitUser() {
   try {
     const payload = { ...userForm.value }
     if (!payload.bidang_id || payload.role !== 'ADMIN_BIDANG') payload.bidang_id = null
+    // username selalu lowercase
+    if (payload.username) payload.username = payload.username.toLowerCase()
     if (editingUser.value) {
       await axios.put(`${API}/users/${editingUser.value.id}`, payload)
       showToast('User diperbarui.', 'success')

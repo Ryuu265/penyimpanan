@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 // GET /api/users - super admin only, list semua user
 router.get('/', verifyToken, requireSuperAdmin, (req, res) => {
   const users = db.prepare(`
-    SELECT u.id, u.nama, u.email, u.role, u.active, u.created_at, b.nama_bidang, u.bidang_id
+    SELECT u.id, u.nama, u.username, u.email, u.role, u.active, u.created_at, b.nama_bidang, u.bidang_id
     FROM users u LEFT JOIN bidang b ON u.bidang_id = b.id
     ORDER BY u.created_at DESC
   `).all();
@@ -17,10 +17,13 @@ router.get('/', verifyToken, requireSuperAdmin, (req, res) => {
 
 // POST /api/users - super admin only, buat user baru
 router.post('/', verifyToken, requireSuperAdmin, (req, res) => {
-  const { nama, email, password, role, bidang_id } = req.body;
+  const { nama, username, email, password, role, bidang_id } = req.body;
 
-  if (!nama || !email || !password || !role) {
-    return res.status(400).json({ error: 'Semua field wajib diisi.' });
+  if (!nama || !username || !password || !role) {
+    return res.status(400).json({ error: 'Nama, username, password, dan role wajib diisi.' });
+  }
+  if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+    return res.status(400).json({ error: 'Username hanya boleh berisi huruf, angka, titik, underscore, dan strip.' });
   }
   if (!['SUPER_ADMIN', 'ADMIN_BIDANG', 'VIEWER'].includes(role)) {
     return res.status(400).json({ error: 'Role tidak valid.' });
@@ -29,18 +32,25 @@ router.post('/', verifyToken, requireSuperAdmin, (req, res) => {
     return res.status(400).json({ error: 'Admin bidang harus memiliki bidang.' });
   }
 
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-  if (existing) return res.status(400).json({ error: 'Email sudah terdaftar.' });
+  const existingUsername = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+  if (existingUsername) return res.status(400).json({ error: 'Username sudah digunakan.' });
+
+  if (email) {
+    const existingEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    if (existingEmail) return res.status(400).json({ error: 'Email sudah terdaftar.' });
+  }
 
   const hashed = bcrypt.hashSync(password, 10);
   const id = 'user-' + uuidv4().slice(0, 8);
+  // Gunakan email dari input atau buat email dummy dari username
+  const finalEmail = email || `${username}@bapperida.local`;
 
-  db.prepare('INSERT INTO users (id, nama, email, password, role, bidang_id) VALUES (?,?,?,?,?,?)').run(
-    id, nama, email, hashed, role, bidang_id || null
+  db.prepare('INSERT INTO users (id, nama, username, email, password, role, bidang_id) VALUES (?,?,?,?,?,?,?)').run(
+    id, nama, username.toLowerCase(), finalEmail, hashed, role, bidang_id || null
   );
 
   db.prepare('INSERT INTO activity_logs (id, user_id, user_nama, aksi, detail) VALUES (?,?,?,?,?)').run(
-    uuidv4(), req.user.id, req.user.nama, 'TAMBAH_USER', `Tambah user: ${email} (${role})`
+    uuidv4(), req.user.id, req.user.nama, 'TAMBAH_USER', `Tambah user: ${username} (${role})`
   );
 
   res.status(201).json({ message: 'User berhasil dibuat.', id });
@@ -48,22 +58,32 @@ router.post('/', verifyToken, requireSuperAdmin, (req, res) => {
 
 // PUT /api/users/:id - super admin only, edit user
 router.put('/:id', verifyToken, requireSuperAdmin, (req, res) => {
-  const { nama, email, role, bidang_id, active } = req.body;
+  const { nama, username, email, role, bidang_id, active } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
 
+  // Cek duplikat username (kecuali milik user sendiri)
+  if (username && username !== user.username) {
+    if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+      return res.status(400).json({ error: 'Username hanya boleh berisi huruf, angka, titik, underscore, dan strip.' });
+    }
+    const dup = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, req.params.id);
+    if (dup) return res.status(400).json({ error: 'Username sudah digunakan.' });
+  }
+
   const newNama = nama || user.nama;
+  const newUsername = username ? username.toLowerCase() : user.username;
   const newEmail = email || user.email;
   const newRole = role || user.role;
-  const newBidangId = (role === 'ADMIN_BIDANG' ? bidang_id : null) ?? user.bidang_id;
+  const newBidangId = (newRole === 'ADMIN_BIDANG' ? bidang_id : null) ?? user.bidang_id;
   const newActive = active !== undefined ? (active ? 1 : 0) : user.active;
 
-  db.prepare('UPDATE users SET nama=?, email=?, role=?, bidang_id=?, active=? WHERE id=?').run(
-    newNama, newEmail, newRole, newBidangId, newActive, req.params.id
+  db.prepare('UPDATE users SET nama=?, username=?, email=?, role=?, bidang_id=?, active=? WHERE id=?').run(
+    newNama, newUsername, newEmail, newRole, newBidangId, newActive, req.params.id
   );
 
   db.prepare('INSERT INTO activity_logs (id, user_id, user_nama, aksi, detail) VALUES (?,?,?,?,?)').run(
-    uuidv4(), req.user.id, req.user.nama, 'EDIT_USER', `Edit user: ${newEmail}`
+    uuidv4(), req.user.id, req.user.nama, 'EDIT_USER', `Edit user: ${newUsername}`
   );
 
   res.json({ message: 'User berhasil diperbarui.' });
@@ -83,7 +103,7 @@ router.post('/:id/reset-password', verifyToken, requireSuperAdmin, (req, res) =>
   db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashed, req.params.id);
 
   db.prepare('INSERT INTO activity_logs (id, user_id, user_nama, aksi, detail) VALUES (?,?,?,?,?)').run(
-    uuidv4(), req.user.id, req.user.nama, 'RESET_PASSWORD', `Reset password: ${user.email}`
+    uuidv4(), req.user.id, req.user.nama, 'RESET_PASSWORD', `Reset password: ${user.username || user.email}`
   );
 
   res.json({ message: 'Password berhasil direset.' });
@@ -94,7 +114,6 @@ router.delete('/:id', verifyToken, requireSuperAdmin, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
 
-  // Prevent deleting yourself
   if (user.id === req.user.id) {
     return res.status(400).json({ error: 'Tidak bisa menghapus akun sendiri.' });
   }
@@ -102,7 +121,7 @@ router.delete('/:id', verifyToken, requireSuperAdmin, (req, res) => {
   db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
 
   db.prepare('INSERT INTO activity_logs (id, user_id, user_nama, aksi, detail) VALUES (?,?,?,?,?)').run(
-    uuidv4(), req.user.id, req.user.nama, 'HAPUS_USER', `Hapus user: ${user.email}`
+    uuidv4(), req.user.id, req.user.nama, 'HAPUS_USER', `Hapus user: ${user.username || user.email}`
   );
 
   res.json({ message: 'User berhasil dihapus.' });
