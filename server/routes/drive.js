@@ -28,24 +28,40 @@ function findKeyPath() {
 
 function getDriveClient() {
   if (driveClient) return driveClient;
-  const keyPath = findKeyPath();
-  if (keyPath) {
-    try {
-      const auth = new google.auth.GoogleAuth({
-        keyFile: keyPath,
-        // Scope penuh — diperlukan untuk create folder & upload file
+
+  try {
+    let auth;
+
+    // Cara 1 (Railway/Production): baca dari env var GOOGLE_SERVICE_ACCOUNT_JSON
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      auth = new google.auth.GoogleAuth({
+        credentials,
         scopes: ['https://www.googleapis.com/auth/drive'],
       });
-      driveClient = google.drive({ version: 'v3', auth });
-      console.log('✅ Google Drive API initialized with Service Account:', SERVICE_ACCOUNT_EMAIL, 'Key:', keyPath);
-      return driveClient;
-    } catch (err) {
-      console.error('❌ Failed to initialize Google Drive API:', err.message);
+      console.log('✅ Google Drive API initialized via GOOGLE_SERVICE_ACCOUNT_JSON env var');
+
+    // Cara 2 (Local dev): baca dari file service-account-key.json
+    } else {
+      const keyPath = findKeyPath();
+      if (!keyPath) {
+        console.warn('⚠️ Google Service Account key tidak ditemukan (file maupun env var)');
+        return null;
+      }
+      auth = new google.auth.GoogleAuth({
+        keyFile: keyPath,
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+      console.log('✅ Google Drive API initialized via key file:', keyPath);
     }
-  } else {
-    console.warn('⚠️ Google Service Account key file not found in candidate paths');
+
+    driveClient = google.drive({ version: 'v3', auth });
+    return driveClient;
+
+  } catch (err) {
+    console.error('❌ Failed to initialize Google Drive API:', err.message);
+    return null;
   }
-  return null;
 }
 
 // Inisialisasi awal saat server boot
