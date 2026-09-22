@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,10 +33,24 @@ app.get('/api/ping', (req, res) => {
   res.json({ status: 'pong', timestamp: new Date().toISOString() });
 });
 
-// 404 handler
+// 404 handler for API
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Endpoint tidak ditemukan.' });
 });
+
+// Serve Vue frontend (dist/) — hanya jika sudah di-build
+const distPath = path.join(__dirname, '..', 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  // Catch-all: kembalikan index.html untuk Vue Router (SPA)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.json({ message: 'Pusat Data Bapperida API. Frontend belum di-build.' });
+  });
+}
 
 const keepAliveService = require('./services/keepAlive');
 

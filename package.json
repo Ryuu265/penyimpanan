@@ -8,6 +8,8 @@
     "server": "node server/index.js",
     "dev:all": "concurrently -n \"server,client\" -c \"blue,green\" \"node server/index.js\" \"vite\"",
     "build": "vite build",
+    "build:prod": "vite build && node server/index.js",
+    "start": "node server/index.js",
     "preview": "vite preview"
   },
   "dependencies": {
