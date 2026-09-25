@@ -32,9 +32,17 @@ const router = createRouter({
           props: { slug: 'palev' }
         },
         {
+          path: 'users',
+          name: 'Users',
+          component: () => import('../views/AdminView.vue'),
+          props: { initialTab: 'users' },
+          meta: { requiresSuperAdmin: true }
+        },
+        {
           path: 'admin',
           name: 'Admin',
           component: () => import('../views/AdminView.vue'),
+          props: { initialTab: 'bidang' },
           meta: { requiresSuperAdmin: true }
         },
         {

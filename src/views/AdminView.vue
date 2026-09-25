@@ -9,14 +9,14 @@
 
     <!-- Tabs -->
     <div class="admin-tabs">
-      <button
-        v-for="tab in tabs" :key="tab.key"
-        class="tab-btn"
-        :class="{ 'tab-btn--active': activeTab === tab.key }"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
+        <button
+          v-for="tab in tabs" :key="tab.key"
+          class="tab-btn"
+          :class="{ 'tab-btn--active': activeTab === tab.key }"
+          @click="switchTab(tab.key)"
+        >
+          {{ tab.label }}
+        </button>
     </div>
 
     <!-- Tab: Bidang -->
@@ -324,7 +324,7 @@
             <h3>Reset Password</h3>
             <button class="btn-icon" @click="resetPasswordUser=null"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
-          <p class="caption" style="margin-bottom:1rem;">Reset password untuk: <strong>{{ resetPasswordUser.email }}</strong></p>
+          <p class="caption" style="margin-bottom:1rem;">Reset password untuk: <strong>{{ resetPasswordUser.nama }} ({{ resetPasswordUser.username || resetPasswordUser.email }})</strong></p>
           <form @submit.prevent="submitResetPassword">
             <div class="form-group">
               <label>Password Baru *</label>
@@ -353,18 +353,44 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 
+const props = defineProps({
+  initialTab: {
+    type: String,
+    default: 'bidang'
+  }
+})
+
+const route = useRoute()
+const router = useRouter()
 const API = '/api'
 
 const tabs = [
-  { key: 'bidang', label: 'Manajemen Bidang' },
   { key: 'users', label: 'Manajemen User' },
+  { key: 'bidang', label: 'Manajemen Bidang' },
   { key: 'keepalive', label: 'Auto-Reset / Keep-Alive' },
   { key: 'demo', label: 'Akun Testing' },
 ]
-const activeTab = ref('bidang')
+
+function getInitialTab() {
+  if (route.path.includes('/users') || route.query.tab === 'users') return 'users'
+  if (route.query.tab) return route.query.tab
+  return props.initialTab || 'users'
+}
+
+const activeTab = ref(getInitialTab())
+
+watch(() => [props.initialTab, route.path, route.query.tab], () => {
+  activeTab.value = getInitialTab()
+})
+
+function switchTab(tabKey) {
+  activeTab.value = tabKey
+  router.replace({ query: { ...route.query, tab: tabKey } })
+}
 
 // Data
 const bidangs = ref([])
@@ -531,12 +557,11 @@ async function deleteBidang(b) {
   } catch (e) { showToast(e.response?.data?.error || 'Gagal menghapus.', 'error') }
 }
 
-// User CRUD
 function openUserModal(u = null) {
   editingUser.value = u
   userForm.value = u
     ? { nama: u.nama, username: u.username || '', password: '', role: u.role, bidang_id: u.bidang_id || '', active: !!u.active }
-    : { nama: '', username: '', password: '', role: 'VIEWER', bidang_id: '', active: true }
+    : { nama: '', username: '', password: '', role: 'ADMIN_BIDANG', bidang_id: bidangs.value[0]?.id || '', active: true }
   formError.value = ''
   showUserModal.value = true
 }
@@ -562,7 +587,7 @@ async function submitUser() {
   } finally { formLoading.value = false }
 }
 async function deleteUser(u) {
-  if (!confirm(`Hapus user "${u.nama}" (${u.email})?`)) return
+  if (!confirm(`Hapus user "${u.nama}" (${u.username || u.email || 'tanpa username'})?`)) return
   try {
     await axios.delete(`${API}/users/${u.id}`)
     showToast('User dihapus.', 'success')
