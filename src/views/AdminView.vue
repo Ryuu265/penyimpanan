@@ -1,9 +1,14 @@
 <template>
   <div class="admin-view">
     <div class="page-header">
-      <div>
-        <h1>Manajemen Administrasi</h1>
-        <p class="caption">Kelola bidang, user, dan akun admin — Super Admin Only</p>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+        <div>
+          <h1>{{ activeTab === 'users' ? 'Manajemen User & Akun Admin' : (activeTab === 'bidang' ? 'Manajemen Bidang' : 'Manajemen Administrasi') }}</h1>
+          <p class="caption">{{ activeTab === 'users' ? 'Kelola akun user dan buat akun admin baru untuk OPD — Super Admin Only' : 'Kelola bidang, sistem, dan konfigurasi server — Super Admin Only' }}</p>
+        </div>
+        <button v-if="activeTab === 'users'" class="btn btn-primary btn-sm" @click="openUserModal()">
+          + Tambah Admin Baru
+        </button>
       </div>
     </div>
 
@@ -60,8 +65,8 @@
     <!-- Tab: Users -->
     <section v-if="activeTab === 'users'" class="section">
       <div class="section-title-row">
-        <h2>Daftar User</h2>
-        <button class="btn btn-primary btn-sm" @click="openUserModal()">+ Tambah User</button>
+        <h2>Daftar User & Admin OPD</h2>
+        <button class="btn btn-primary btn-sm" @click="openUserModal()">+ Tambah Admin Baru</button>
       </div>
       <div v-if="loadingUsers" class="empty-state"><div class="spinner"></div></div>
       <div v-else style="overflow-x:auto;">
@@ -264,7 +269,7 @@
       <div v-if="showUserModal" class="modal-overlay" @click.self="showUserModal=false">
         <div class="modal-box">
           <div class="modal-header">
-            <h3>{{ editingUser ? 'Edit User' : 'Tambah User Baru' }}</h3>
+            <h3>{{ editingUser ? 'Edit Akun User' : 'Tambah Akun Admin Baru' }}</h3>
             <button class="btn-icon" @click="showUserModal=false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
           <form @submit.prevent="submitUser">
@@ -308,7 +313,7 @@
               <button type="button" class="btn btn-outline" @click="showUserModal=false">Batal</button>
               <button type="submit" class="btn btn-primary" :disabled="formLoading">
                 <span v-if="formLoading" class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
-                {{ editingUser ? 'Simpan' : 'Buat User' }}
+                {{ editingUser ? 'Simpan Perubahan' : 'Buat Akun Admin' }}
               </button>
             </div>
           </form>
@@ -558,6 +563,7 @@ async function deleteBidang(b) {
 }
 
 function openUserModal(u = null) {
+  if (bidangs.value.length === 0) fetchBidangs()
   editingUser.value = u
   userForm.value = u
     ? { nama: u.nama, username: u.username || '', password: '', role: u.role, bidang_id: u.bidang_id || '', active: !!u.active }

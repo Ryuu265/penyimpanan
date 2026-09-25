@@ -40,12 +40,6 @@
             </svg>
             Manajemen User
           </router-link>
-          <router-link to="/dashboard/admin" class="nav-item" active-class="nav-item--active">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-            </svg>
-            Kelola Bidang
-          </router-link>
           <router-link to="/dashboard/logs" class="nav-item" active-class="nav-item--active">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -54,13 +48,13 @@
           </router-link>
         </template>
 
-        <!-- Sidebar Bottom Action (sesuai wireframe: + Tambah / edit) -->
+        <!-- Sidebar Bottom Action -->
         <div v-if="authStore.isSuperAdmin" class="sidebar-bottom-action">
-          <router-link to="/dashboard/admin" class="btn-sidebar-add" title="Kelola Bidang & User">
+          <router-link to="/dashboard/users" class="btn-sidebar-add" title="Tambah Akun Admin Baru">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            <span>+ Tambah / Edit</span>
+            <span>+ Tambah Admin</span>
           </router-link>
         </div>
       </nav>

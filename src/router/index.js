@@ -40,10 +40,7 @@ const router = createRouter({
         },
         {
           path: 'admin',
-          name: 'Admin',
-          component: () => import('../views/AdminView.vue'),
-          props: { initialTab: 'bidang' },
-          meta: { requiresSuperAdmin: true }
+          redirect: '/dashboard/users'
         },
         {
           path: 'logs',
