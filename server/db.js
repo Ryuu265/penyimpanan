@@ -112,27 +112,15 @@ function seed() {
   db.prepare('INSERT OR IGNORE INTO users (id, nama, username, email, password, role, bidang_id) VALUES (?,?,?,?,?,?,?)').run(
     'user-viewer-001', 'Pegawai Umum', 'pegawai', 'pegawai@bapperida.go.id', hashViewer, 'VIEWER', null
   );
-
-  // Seed mock drive links untuk Perencanaan
-  db.prepare('INSERT OR IGNORE INTO drive_links (id, bidang_id, nama_folder, drive_folder_id, drive_folder_url, dibuat_oleh) VALUES (?,?,?,?,?,?)').run(
-    'link-001', bidang1Id, 'RPJMD 2025-2029', 'mock-folder-001', 'https://drive.google.com/drive/folders/mock-001', 'Admin Perencanaan'
-  );
-  db.prepare('INSERT OR IGNORE INTO drive_links (id, bidang_id, nama_folder, drive_folder_id, drive_folder_url, dibuat_oleh) VALUES (?,?,?,?,?,?)').run(
-    'link-002', bidang1Id, 'RKPD 2025', 'mock-folder-002', 'https://drive.google.com/drive/folders/mock-002', 'Admin Perencanaan'
-  );
-  db.prepare('INSERT OR IGNORE INTO drive_links (id, bidang_id, nama_folder, drive_folder_id, drive_folder_url, dibuat_oleh) VALUES (?,?,?,?,?,?)').run(
-    'link-003', bidang1Id, 'Renja OPD 2025', 'mock-folder-003', 'https://drive.google.com/drive/folders/mock-003', 'Admin Perencanaan'
-  );
-
-  // Seed mock drive links untuk Palev
-  db.prepare('INSERT OR IGNORE INTO drive_links (id, bidang_id, nama_folder, drive_folder_id, drive_folder_url, dibuat_oleh) VALUES (?,?,?,?,?,?)').run(
-    'link-004', bidang2Id, 'Laporan Evaluasi Q1 2025', 'mock-folder-004', 'https://drive.google.com/drive/folders/mock-004', 'Admin Palev'
-  );
-  db.prepare('INSERT OR IGNORE INTO drive_links (id, bidang_id, nama_folder, drive_folder_id, drive_folder_url, dibuat_oleh) VALUES (?,?,?,?,?,?)').run(
-    'link-005', bidang2Id, 'Monev RPJMD 2024', 'mock-folder-005', 'https://drive.google.com/drive/folders/mock-005', 'Admin Palev'
-  );
-
   console.log('✅ Database seeded successfully');
+}
+
+// Hapus data dummy bawaan (RPJMD 2025-2029, RKPD 2025, Renja OPD 2025, dll) dari database
+try {
+  db.prepare("DELETE FROM drive_links WHERE drive_folder_id LIKE 'mock-%' OR id LIKE 'link-%'").run();
+  db.prepare("DELETE FROM activity_logs WHERE target_link_id LIKE 'link-%'").run();
+} catch (err) {
+  /* Abaikan jika tabel belum ada atau sudah bersih */
 }
 
 function seedTahapan() {

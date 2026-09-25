@@ -78,32 +78,8 @@ function formatFileSize(bytes) {
   return parseFloat((num / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-// Mock data cadangan jika membuka folder bawaan seed ('mock-folder-xxx')
-const MOCK_FILES = {
-  'mock-folder-001': [
-    { id: 'file-001', name: 'Naskah RPJMD 2025-2029.pdf', mimeType: 'application/pdf', size: '4.2 MB', modifiedTime: '2025-03-15', webViewLink: '#', webContentLink: '#', iconLink: 'pdf' },
-    { id: 'file-002', name: 'Matriks Target Kinerja.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: '1.8 MB', modifiedTime: '2025-04-01', webViewLink: '#', webContentLink: '#', iconLink: 'xlsx' },
-    { id: 'file-003', name: 'Peta Jalan Pembangunan.pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', size: '8.5 MB', modifiedTime: '2025-04-10', webViewLink: '#', webContentLink: '#', iconLink: 'pptx' },
-  ],
-  'mock-folder-002': [
-    { id: 'file-004', name: 'RKPD 2025 Final.pdf', mimeType: 'application/pdf', size: '3.1 MB', modifiedTime: '2025-01-20', webViewLink: '#', webContentLink: '#', iconLink: 'pdf' },
-    { id: 'file-005', name: 'Prioritas Program 2025.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: '856 KB', modifiedTime: '2025-02-05', webViewLink: '#', webContentLink: '#', iconLink: 'docx' },
-  ],
-  'mock-folder-003': [
-    { id: 'file-006', name: 'Renja Dinas PU 2025.pdf', mimeType: 'application/pdf', size: '2.3 MB', modifiedTime: '2025-02-28', webViewLink: '#', webContentLink: '#', iconLink: 'pdf' },
-    { id: 'file-007', name: 'Renja Dinas Kesehatan 2025.pdf', mimeType: 'application/pdf', size: '1.9 MB', modifiedTime: '2025-03-01', webViewLink: '#', webContentLink: '#', iconLink: 'pdf' },
-    { id: 'file-008', name: 'Rekap Renja Semua OPD.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: '2.1 MB', modifiedTime: '2025-03-15', webViewLink: '#', webContentLink: '#', iconLink: 'xlsx' },
-  ],
-  'mock-folder-004': [
-    { id: 'file-009', name: 'Laporan Evaluasi Q1 2025.pdf', mimeType: 'application/pdf', size: '5.6 MB', modifiedTime: '2025-04-15', webViewLink: '#', webContentLink: '#', iconLink: 'pdf' },
-    { id: 'file-010', name: 'Dashboard Kinerja Q1.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: '3.2 MB', modifiedTime: '2025-04-20', webViewLink: '#', webContentLink: '#', iconLink: 'xlsx' },
-  ],
-  'mock-folder-005': [
-    { id: 'file-011', name: 'Monev RPJMD 2024 - Tahunan.pdf', mimeType: 'application/pdf', size: '7.8 MB', modifiedTime: '2025-01-30', webViewLink: '#', webContentLink: '#', iconLink: 'pdf' },
-    { id: 'file-012', name: 'Capaian Target RPJMD 2024.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: '4.1 MB', modifiedTime: '2025-02-10', webViewLink: '#', webContentLink: '#', iconLink: 'xlsx' },
-    { id: 'file-013', name: 'Presentasi Monev Bupati.pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', size: '12.3 MB', modifiedTime: '2025-02-15', webViewLink: '#', webContentLink: '#', iconLink: 'pptx' },
-  ],
-};
+// Data dummy telah dihapus - folder sekarang terpisah dan independen
+const MOCK_FILES = {};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/drive/service-account
@@ -189,23 +165,7 @@ router.get('/folders/:folderId', verifyToken, async (req, res) => {
   const { folderId } = req.params;
 
   if (folderId && folderId.startsWith('mock-')) {
-    // Kalau subfolder mock (format: mock-folder-xxx-sub1)
-    if (folderId.includes('-sub')) {
-      return res.json({
-        files: [
-          { id: folderId + '-f1', name: 'Dokumen Pendukung A.pdf', mimeType: 'application/pdf', isFolder: false, size: '1.2 MB', modifiedTime: '2025-05-01', webViewLink: '#', webContentLink: '#' },
-          { id: folderId + '-f2', name: 'Lampiran B.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', isFolder: false, size: '450 KB', modifiedTime: '2025-05-03', webViewLink: '#', webContentLink: '#' },
-        ],
-        isMock: true,
-        serviceAccount: SERVICE_ACCOUNT_EMAIL,
-      });
-    }
-    const files = MOCK_FILES[folderId] || [];
-    const mockWithFolders = [
-      { id: folderId + '-sub1', name: 'Subfolder Dokumen Pendukung', mimeType: 'application/vnd.google-apps.folder', isFolder: true, size: null, modifiedTime: '2025-04-01', webViewLink: '#', webContentLink: '#' },
-      ...files.map(f => ({ ...f, isFolder: false }))
-    ];
-    return res.json({ files: mockWithFolders, isMock: true, serviceAccount: SERVICE_ACCOUNT_EMAIL });
+    return res.json({ files: [], isMock: true, serviceAccount: SERVICE_ACCOUNT_EMAIL, totalFiles: 0 });
   }
 
   const drive = getDriveClient();
