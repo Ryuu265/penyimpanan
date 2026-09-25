@@ -161,7 +161,7 @@
               <span class="tab-badge">Folder Independen</span>
             </div>
             <div class="tab-subtitle">
-              {{ selectedTahapanObj.deskripsi || 'Tahap proses perencanaan' }} &mdash; Setiap admin OPD dapat membuat/mengisi foldernya sendiri secara manual
+              {{ selectedTahapanObj.deskripsi || 'Tahap proses perencanaan' }}
             </div>
           </div>
         </div>
@@ -184,8 +184,7 @@
       <div v-else-if="filteredLinks.length === 0" class="empty-state">
         <div class="empty-icon-wrap" style="font-size: 2.2rem; margin-bottom: 0.5rem;">📂</div>
         <p v-if="selectedTahapanObj">
-          Belum ada folder dokumen untuk tahapan <strong>{{ selectedTahapanObj.label }}</strong>.<br>
-          <span class="caption" style="display:block; margin-top:4px;">Tiap Admin OPD dapat membuat/menautkan foldernya sendiri secara independen untuk tahapan ini.</span>
+          Belum ada folder dokumen untuk tahapan <strong>{{ selectedTahapanObj.label }}</strong>.
         </p>
         <p v-else-if="searchQuery">
           Tidak ada folder yang cocok dengan pencarian "<strong>{{ searchQuery }}</strong>".
@@ -908,9 +907,14 @@ watch(() => [props.slug, route.params.bidang], async () => {
   background: var(--color-surface);
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 0.65rem 0.75rem 0.65rem;
+  padding: 10px 12px 12px;
   width: 175px;
+  min-width: 175px;
+  max-width: 175px;
+  flex: 0 0 175px;
   height: 220px;
+  min-height: 220px;
+  max-height: 220px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -949,24 +953,29 @@ watch(() => [props.slug, route.params.bidang], async () => {
 /* Aksi dalam kotak */
 .flow-box-actions {
   width: 100%;
-  height: 24px;
+  height: 22px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.15rem;
+  margin-bottom: 2px;
   flex-shrink: 0;
 }
 .flow-arrows-inline {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   width: 44px;
 }
 .btn-flow-nav {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: #F1F5F9;
   border: 1px solid #CBD5E1;
   border-radius: 4px;
   font-size: 0.65rem;
-  padding: 2px 5px;
   cursor: pointer;
   color: var(--color-text-secondary);
   line-height: 1;
@@ -983,18 +992,23 @@ watch(() => [props.slug, route.params.bidang], async () => {
 
 .flow-crud-btns {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   width: 44px;
   justify-content: flex-end;
 }
 .btn-flow-tool {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 0.75rem;
-  padding: 1px 3px;
+  font-size: 0.8rem;
   opacity: 0.65;
-  border-radius: 3px;
+  border-radius: 4px;
   transition: opacity 0.15s, background 0.15s;
 }
 .btn-flow-tool:hover {
@@ -1008,6 +1022,8 @@ watch(() => [props.slug, route.params.bidang], async () => {
 .flow-box-icon {
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 10px;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -1015,7 +1031,8 @@ watch(() => [props.slug, route.params.bidang], async () => {
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  margin: 0.2rem auto 0.3rem;
+  line-height: 1;
+  margin: 2px auto 6px;
   flex-shrink: 0;
   transition: all 0.2s ease;
 }
@@ -1026,11 +1043,11 @@ watch(() => [props.slug, route.params.bidang], async () => {
 }
 
 .flow-box-label {
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   font-weight: 700;
   color: var(--color-text-primary);
-  line-height: 1.25;
-  height: 22px;
+  line-height: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1038,14 +1055,17 @@ watch(() => [props.slug, route.params.bidang], async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin: 0;
   flex-shrink: 0;
 }
 .flow-box-desc {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--color-text-secondary);
-  margin-top: 2px;
+  margin: 4px 0;
   line-height: 1.35;
-  height: 36px;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1065,9 +1085,10 @@ watch(() => [props.slug, route.params.bidang], async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 0.4rem;
+  padding-top: 6px;
   border-top: 1px dashed var(--color-border);
   flex-shrink: 0;
+  height: 26px;
 }
 .flow-box-step {
   font-size: 0.65rem;
