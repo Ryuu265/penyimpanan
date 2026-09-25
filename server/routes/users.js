@@ -75,7 +75,11 @@ router.put('/:id', verifyToken, requireSuperAdmin, (req, res) => {
   const newUsername = username ? username.toLowerCase() : user.username;
   const newEmail = email || user.email;
   const newRole = role || user.role;
-  const newBidangId = (newRole === 'ADMIN_BIDANG' ? bidang_id : null) ?? user.bidang_id;
+  // bidang_id hanya berlaku jika role ADMIN_BIDANG; kosong string dianggap null
+  let newBidangId = null;
+  if (newRole === 'ADMIN_BIDANG') {
+    newBidangId = (bidang_id && bidang_id.trim()) ? bidang_id.trim() : (user.bidang_id || null);
+  }
   const newActive = active !== undefined ? (active ? 1 : 0) : user.active;
 
   db.prepare('UPDATE users SET nama=?, username=?, email=?, role=?, bidang_id=?, active=? WHERE id=?').run(
