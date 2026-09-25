@@ -11,6 +11,14 @@ db.pragma('foreign_keys = ON');
 
 // Create tables
 db.exec(`
+  CREATE TABLE IF NOT EXISTS tahun (
+    id TEXT PRIMARY KEY,
+    nama TEXT NOT NULL UNIQUE,
+    label TEXT,
+    urutan INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS bidang (
     id TEXT PRIMARY KEY,
     nama_bidang TEXT NOT NULL UNIQUE,
@@ -68,33 +76,76 @@ db.exec(`
   );
 `);
 
-// Migrasi aman untuk database yang sudah ada
+// ─── Migrasi aman ──────────────────────────────────────────────────────────
+
+// 1. Migrasi: Restrukturisasi tabel bidang
+//    - Hapus UNIQUE constraint pada nama_bidang (agar bisa ada nama sama lintas tahun)
+//    - Tambah kolom tahun_id
+try {
+  const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='bidang'").get();
+  const needsMigration = tableInfo && tableInfo.sql.includes('UNIQUE') && !tableInfo.sql.includes('tahun_id');
+  if (needsMigration) {
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      BEGIN TRANSACTION;
+      CREATE TABLE _bidang_migrated (
+        id TEXT PRIMARY KEY,
+        nama_bidang TEXT NOT NULL,
+        tahun_id TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO _bidang_migrated (id, nama_bidang, created_at)
+        SELECT id, nama_bidang, created_at FROM bidang;
+      DROP TABLE bidang;
+      ALTER TABLE _bidang_migrated RENAME TO bidang;
+      COMMIT;
+    `);
+    db.pragma('foreign_keys = ON');
+    console.log('✅ Bidang table migrated: removed UNIQUE, added tahun_id');
+  }
+} catch (err) {
+  try { db.pragma('foreign_keys = ON'); } catch (_) {}
+  try { db.exec('ROLLBACK;'); } catch (_) {}
+  try { db.exec('DROP TABLE IF EXISTS _bidang_migrated;'); } catch (_) {}
+  console.error('Migration bidang error:', err.message);
+}
+
+// 2. Migrasi kolom tahun_id jika belum ada (untuk DB yang sudah dimigrasi sebelumnya)
+try {
+  db.prepare('ALTER TABLE bidang ADD COLUMN tahun_id TEXT').run();
+} catch (_) { /* kolom sudah ada */ }
+
+// 3. Migrasi kolom lain
 try {
   db.prepare("ALTER TABLE drive_links ADD COLUMN tahapan_id TEXT REFERENCES tahapan(id) ON DELETE SET NULL").run();
-} catch (err) { /* Kolom sudah ada */ }
+} catch (_) { /* Kolom sudah ada */ }
 
 try {
   db.prepare("ALTER TABLE users ADD COLUMN username TEXT").run();
-} catch (err) { /* Kolom sudah ada */ }
+} catch (_) { /* Kolom sudah ada */ }
 
 // Buat index unik username (ignore jika sudah ada)
 try {
   db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL").run();
-} catch (err) { /* Index sudah ada */ }
+} catch (_) { /* Index sudah ada */ }
 
-// Seed data jika belum ada
+// ─── Hapus data dummy ────────────────────────────────────────────────────────
+try {
+  db.prepare("DELETE FROM drive_links WHERE drive_folder_id LIKE 'mock-%' OR id LIKE 'link-%'").run();
+  db.prepare("DELETE FROM activity_logs WHERE target_link_id LIKE 'link-%'").run();
+} catch (_) { /* Abaikan jika tabel belum ada atau sudah bersih */ }
+
+// ─── Seed functions ──────────────────────────────────────────────────────────
 function seed() {
   const existing = db.prepare('SELECT COUNT(*) as c FROM users').get();
   if (existing.c > 0) return;
 
-  // Seed bidang
   const bidang1Id = 'bidang-perencanaan-001';
   const bidang2Id = 'bidang-palev-002';
 
   db.prepare('INSERT OR IGNORE INTO bidang (id, nama_bidang) VALUES (?, ?)').run(bidang1Id, 'Perencanaan');
   db.prepare('INSERT OR IGNORE INTO bidang (id, nama_bidang) VALUES (?, ?)').run(bidang2Id, 'Pengendalian & Evaluasi (Palev)');
 
-  // Seed users
   const hashSuperAdmin = bcrypt.hashSync('superadmin123', 10);
   const hashAdmin1 = bcrypt.hashSync('admin123', 10);
   const hashAdmin2 = bcrypt.hashSync('admin123', 10);
@@ -115,12 +166,15 @@ function seed() {
   console.log('✅ Database seeded successfully');
 }
 
-// Hapus data dummy bawaan (RPJMD 2025-2029, RKPD 2025, Renja OPD 2025, dll) dari database
-try {
-  db.prepare("DELETE FROM drive_links WHERE drive_folder_id LIKE 'mock-%' OR id LIKE 'link-%'").run();
-  db.prepare("DELETE FROM activity_logs WHERE target_link_id LIKE 'link-%'").run();
-} catch (err) {
-  /* Abaikan jika tabel belum ada atau sudah bersih */
+function seedTahun() {
+  // Buat tahun 2025 sebagai default jika belum ada
+  const defaultTahunId = 'tahun-2025-001';
+  db.prepare('INSERT OR IGNORE INTO tahun (id, nama, label, urutan) VALUES (?, ?, ?, ?)').run(
+    defaultTahunId, '2025', 'Tahun Anggaran 2025', 0
+  );
+  // Hubungkan bidang yang belum punya tahun ke tahun 2025
+  db.prepare("UPDATE bidang SET tahun_id = ? WHERE tahun_id IS NULL OR tahun_id = ''").run(defaultTahunId);
+  console.log('✅ Tahun 2025 seeded and bidangs linked');
 }
 
 function seedTahapan() {
@@ -173,7 +227,6 @@ function seedSettings() {
   }
 }
 
-// Backfill username untuk akun lama yang belum punya username
 function migrateUsername() {
   const defaults = [
     { id: 'user-super-001', username: 'superadmin' },
@@ -181,13 +234,14 @@ function migrateUsername() {
     { id: 'user-admin-palev', username: 'admin.palev' },
     { id: 'user-viewer-001', username: 'pegawai' },
   ];
-  const stmt = db.prepare('UPDATE users SET username = ? WHERE id = ? AND (username IS NULL OR username = \'\')');
+  const stmt = db.prepare("UPDATE users SET username = ? WHERE id = ? AND (username IS NULL OR username = '')");
   for (const u of defaults) {
     stmt.run(u.username, u.id);
   }
 }
 
 seed();
+seedTahun();
 seedTahapan();
 seedSettings();
 migrateUsername();

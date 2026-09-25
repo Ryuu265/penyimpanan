@@ -16,6 +16,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/tahun', require('./routes/tahun'));
 app.use('/api/bidang', require('./routes/bidang'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/drive-links', require('./routes/driveLinks'));
@@ -23,6 +24,7 @@ app.use('/api/drive', require('./routes/drive'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
 app.use('/api/tahapan', require('./routes/tahapan'));
 app.use('/api/admin/keepalive', require('./routes/keepAlive'));
+
 
 // Health check & Ping
 app.get('/api/health', (req, res) => {

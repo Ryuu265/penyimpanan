@@ -402,7 +402,10 @@ import { useAuthStore } from '../stores/auth'
 import FolderCard from '../components/FolderCard.vue'
 import FolderExplorer from '../components/FolderExplorer.vue'
 
-const props = defineProps({ slug: String })
+const props = defineProps({
+  slug: String,      // legacy: 'perencanaan' | 'palev'
+  bidangId: String   // baru: ID bidang langsung dari route /dashboard/modul/:bidangId
+})
 const route = useRoute()
 const authStore = useAuthStore()
 const API = '/api'
@@ -447,7 +450,12 @@ const tahapanForm = ref({ label: '', deskripsi: '', icon: '📋' })
 
 // Computed: Bidang Aktif
 const currentBidang = computed(() => {
-  const slug = props.slug || route.params.bidang || 'perencanaan'
+  // Mode baru: bidangId prop (dari route /dashboard/modul/:bidangId)
+  if (props.bidangId) {
+    return bidangs.value.find(b => b.id === props.bidangId) || null
+  }
+  // Mode legacy: slug-based
+  const slug = props.slug || 'perencanaan'
   if (slug === 'perencanaan') return bidangs.value.find(b => b.nama_bidang?.toLowerCase().includes('perencanaan'))
   if (slug === 'palev') return bidangs.value.find(b => b.nama_bidang?.toLowerCase().includes('palev') || b.nama_bidang?.toLowerCase().includes('pengendalian'))
   return bidangs.value.find(b => b.id === slug) || bidangs.value[0]
@@ -822,7 +830,7 @@ watch(
   { flush: 'post' }
 )
 
-watch(() => [props.slug, route.params.bidang], async () => {
+watch(() => [props.slug, props.bidangId, route.params.bidangId], async () => {
   selectedTahapanFilter.value = 'all'
   await Promise.all([fetchDriveLinks(), fetchTahapan()])
 })

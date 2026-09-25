@@ -12,13 +12,21 @@ const router = createRouter({
     },
     {
       path: '/',
-      redirect: '/dashboard/perencanaan'
+      redirect: '/dashboard'
     },
     {
       path: '/dashboard',
       component: () => import('../layouts/DashboardLayout.vue'),
       meta: { requiresAuth: true },
       children: [
+        // ─── Route baru: modul berdasarkan bidangId ───────────────────────
+        {
+          path: 'modul/:bidangId',
+          name: 'Modul',
+          component: () => import('../views/BidangView.vue'),
+          props: true
+        },
+        // ─── Legacy routes untuk backward compat ─────────────────────────
         {
           path: 'perencanaan',
           name: 'Perencanaan',
@@ -31,6 +39,7 @@ const router = createRouter({
           component: () => import('../views/BidangView.vue'),
           props: { slug: 'palev' }
         },
+        // ─── Admin & Logs ─────────────────────────────────────────────────
         {
           path: 'users',
           name: 'Users',
@@ -47,12 +56,20 @@ const router = createRouter({
           name: 'Logs',
           component: () => import('../views/LogsView.vue'),
           meta: { requiresSuperAdmin: true }
+        },
+        // ─── Default: redirect ke halaman utama ───────────────────────────
+        {
+          path: '',
+          redirect: () => {
+            // Akan di-handle oleh DashboardLayout yang navigasi ke modul pertama
+            return '/dashboard/perencanaan'
+          }
         }
       ]
     },
     {
       path: '/:pathMatch(.*)*',
-      redirect: '/dashboard/perencanaan'
+      redirect: '/dashboard'
     }
   ]
 })
@@ -70,11 +87,11 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.meta.requiresGuest && authStore.isLoggedIn) {
-    return next('/dashboard/perencanaan')
+    return next('/dashboard')
   }
 
   if (to.meta.requiresSuperAdmin && !authStore.isSuperAdmin) {
-    return next('/dashboard/perencanaan')
+    return next('/dashboard')
   }
 
   next()
