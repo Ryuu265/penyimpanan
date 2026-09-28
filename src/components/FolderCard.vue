@@ -38,12 +38,22 @@
 
     <!-- Footer Card -->
     <div class="fc-footer">
-      <span class="caption">Oleh {{ link.dibuat_oleh }}</span>
-      <a :href="link.drive_folder_url" target="_blank" class="btn-icon" title="Buka di Google Drive" @click.stop>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-        </svg>
-      </a>
+      <div style="display:flex;align-items:center;gap:0.4rem;">
+        <span class="badge" style="font-size:0.65rem;background:#EBF5FF;color:#1E40AF;border:1px solid #BFDBFE;">Google Drive</span>
+        <span class="caption">Oleh {{ link.dibuat_oleh }}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.25rem;">
+        <span class="btn-icon" style="opacity:0.45;cursor:not-allowed;" title="Kompres / ZIP tidak tersedia untuk folder Google Drive" @click.stop>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+          </svg>
+        </span>
+        <a :href="link.drive_folder_url" target="_blank" class="btn-icon" title="Buka di Google Drive" @click.stop>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        </a>
+      </div>
     </div>
   </div>
 </template>

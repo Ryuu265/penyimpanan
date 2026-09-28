@@ -24,6 +24,10 @@ app.use('/api/drive', require('./routes/drive'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
 app.use('/api/tahapan', require('./routes/tahapan'));
 app.use('/api/admin/keepalive', require('./routes/keepAlive'));
+app.use('/api/local-files', require('./routes/localFiles'));
+app.use('/api/backups', require('./routes/backups'));
+app.use('/api/archive', require('./routes/archive'));
+app.use('/api/search', require('./routes/search'));
 
 
 // Health check & Ping
@@ -56,14 +60,22 @@ if (fs.existsSync(distPath)) {
 }
 
 const keepAliveService = require('./services/keepAlive');
+const storageService = require('./services/storageService');
+const schedulerService = require('./services/schedulerService');
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Pusat Data Bapperida API Server`);
   console.log(`   Running at: http://localhost:${PORT}`);
   console.log(`   Health:     http://localhost:${PORT}/api/health\n`);
   
+  // Inisialisasi direktori penyimpanan lokal (hot, archive, backup, cache)
+  storageService.initStorageDirs();
+
   // Inisialisasi Auto-Reset / Keep-Alive Service
   keepAliveService.init();
+
+  // Inisialisasi Scheduler Arsip & Backup Otomatis
+  schedulerService.initScheduler();
 });
 
 module.exports = app;

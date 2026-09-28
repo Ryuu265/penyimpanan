@@ -78,7 +78,11 @@ router.put('/:id', verifyToken, requireSuperAdmin, (req, res) => {
   // bidang_id hanya berlaku jika role ADMIN_BIDANG; kosong string dianggap null
   let newBidangId = null;
   if (newRole === 'ADMIN_BIDANG') {
-    newBidangId = (bidang_id && bidang_id.trim()) ? bidang_id.trim() : (user.bidang_id || null);
+    if (bidang_id !== undefined) {
+      newBidangId = (typeof bidang_id === 'string' && bidang_id.trim()) ? bidang_id.trim() : null;
+    } else {
+      newBidangId = user.bidang_id;
+    }
   }
   const newActive = active !== undefined ? (active ? 1 : 0) : user.active;
 

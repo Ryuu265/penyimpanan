@@ -32,6 +32,11 @@ build/
 
 # Uploads & user-generated content
 uploads/
+storage/
+hot_storage/
+archive_storage/
+backup_storage/
+cache_storage/
 
 # Editor directories and files
 .vscode/*

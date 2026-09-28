@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const db = require('../db');
 const JWT_SECRET = process.env.JWT_SECRET || 'pusat-data-bapperida-secret-2025';
 
 function generateToken(user) {
@@ -22,7 +23,12 @@ function verifyToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    // Selalu ambil profil terbaru dari DB agar perubahan bidang/role langsung sinkron tanpa stale token
+    const freshUser = db.prepare('SELECT id, nama, username, email, role, bidang_id, active FROM users WHERE id = ?').get(decoded.id);
+    if (!freshUser || !freshUser.active) {
+      return res.status(401).json({ error: 'Akun tidak ditemukan atau telah dinonaktifkan.' });
+    }
+    req.user = freshUser;
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Token tidak valid atau sudah kadaluarsa.' });

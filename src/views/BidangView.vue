@@ -213,8 +213,149 @@
       <!-- Tombol "+ Tambah" di Bagian Bawah (Sesuai Posisi di Sketsa, Admin Only) -->
       <div v-if="canAdd" class="bottom-action-area">
         <button class="btn btn-primary btn-lg" @click="openAddModal()">
-          + Tambah Folder
+          + Tambah Folder Google Drive
         </button>
+      </div>
+    </section>
+
+    <!-- Section 3: Dokumen Penyimpanan Lokal (Server Storage) -->
+    <section class="section section-local-files" style="margin-top:1.5rem;">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">📂 Dokumen & File Server Lokal</h2>
+          <p class="caption">File tersimpan langsung di server lokal. Mendukung kompresi ZIP, ekstraksi arsip, dan backup otomatis.</p>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <!-- Tombol Upload File Lokal -->
+          <label v-if="canEdit" class="btn btn-primary btn-sm" :class="{ disabled: uploadingLocal }">
+            <span v-if="uploadingLocal">⏳ Mengupload...</span>
+            <span v-else>⬆️ Upload File Lokal</span>
+            <input type="file" multiple @change="handleUploadLocalFiles" style="display:none" :disabled="uploadingLocal" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Toolbar Multi-Select Kompresi ZIP & Kompres Ukuran Media -->
+      <div v-if="selectedLocalIds.length > 0" class="batch-toolbar" style="margin-bottom:1rem;background:#EFF6FF;padding:0.6rem 1rem;border-radius:var(--radius-md);display:flex;align-items:center;gap:0.8rem;flex-wrap:wrap;">
+        <span class="batch-count" style="font-weight:600;font-size:0.85rem;color:#1D4ED8;">{{ selectedLocalIds.length }} file lokal dipilih</span>
+        <button class="btn btn-primary btn-sm" @click="downloadLocalZipBatch" :disabled="zippingLocal">
+          <span v-if="zippingLocal" class="spinner" style="width:12px;height:12px;border-width:2px;"></span>
+          📦 Kompres / Download ZIP (Struktur Terjaga)
+        </button>
+        <button v-if="canEdit" class="btn btn-outline btn-sm" @click="compressMediaBatchAction" :disabled="compressingBatch">
+          <span v-if="compressingBatch" class="spinner" style="width:12px;height:12px;border-width:2px;"></span>
+          🗜️ Kompres Ukuran Gambar/PDF
+        </button>
+        <button class="btn btn-outline btn-sm" @click="selectedLocalIds = []">Batal Pilih</button>
+      </div>
+
+      <!-- Loading State Local Files -->
+      <div v-if="loadingLocalFiles" class="empty-state">
+        <p>Memuat file penyimpanan lokal...</p>
+      </div>
+
+      <!-- Empty State Local Files -->
+      <div v-else-if="filteredLocalFiles.length === 0" class="empty-state">
+        <p>Belum ada file lokal yang diunggah untuk modul ini.</p>
+      </div>
+
+      <!-- Table Local Files -->
+      <div v-else class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:36px;">
+                <input type="checkbox" :checked="isAllLocalSelected" @change="toggleSelectAllLocal" />
+              </th>
+              <th>Nama File</th>
+              <th>Status / Lokasi</th>
+              <th>Tahapan</th>
+              <th>Ukuran</th>
+              <th>Diunggah Oleh</th>
+              <th>Tanggal</th>
+              <th style="text-align:right;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="lf in filteredLocalFiles" :key="lf.id">
+              <td>
+                <input type="checkbox" :value="lf.id" v-model="selectedLocalIds" />
+              </td>
+              <td>
+                <div style="display:flex;align-items:center;gap:0.4rem;">
+                  <span>{{ getLocalFileEmoji(lf.mime_type) }}</span>
+                  <strong>{{ lf.original_name }}</strong>
+                  <span v-if="lf.pinned" class="badge badge-admin" title="Dokumen ini dipin agar tidak diarsipkan">📌 Pin</span>
+                </div>
+              </td>
+              <td>
+                <span class="badge" :class="lf.location === 'hot' ? 'badge-hot' : 'badge-cold'">
+                  {{ lf.location === 'hot' ? 'Aktif (Hot)' : 'Arsip (Cold)' }}
+                </span>
+                <span v-if="lf.compressed" class="caption" style="margin-left:4px;font-size:0.7rem;">(Zipped)</span>
+              </td>
+              <td>{{ lf.nama_tahapan || 'Umum' }}</td>
+              <td>{{ formatSize(lf.size) }}</td>
+              <td class="caption">{{ lf.uploaded_by }}</td>
+              <td class="caption">{{ formatDate(lf.created_at) }}</td>
+              <td style="text-align:right;white-space:nowrap;">
+                <!-- Download button -->
+                <button class="btn btn-primary btn-xs" @click="downloadLocalFile(lf)" :disabled="extractingLocalId === lf.id">
+                  <span v-if="extractingLocalId === lf.id">Mengambil...</span>
+                  <span v-else-if="lf.location === 'archive'">Ekstrak & Unduh ↓</span>
+                  <span v-else>Unduh ↓</span>
+                </button>
+
+                <!-- Kompres Ukuran Gambar/PDF (Hot Storage Only) -->
+                <button
+                  v-if="lf.location === 'hot' && isCompressible(lf.mime_type, lf.original_name) && canEdit"
+                  class="btn btn-outline btn-xs"
+                  style="margin-left:4px;"
+                  :disabled="compressingLocalId === lf.id"
+                  @click="compressMediaSingle(lf)"
+                  title="Kompres ukuran gambar/PDF secara fisik"
+                >
+                  <span v-if="compressingLocalId === lf.id">...</span>
+                  <span v-else>🗜️ Kompres</span>
+                </button>
+
+                <!-- Pulihkan ke Aktif (jika arsip) -->
+                <button
+                  v-if="lf.location === 'archive' && canEdit"
+                  class="btn btn-outline btn-xs"
+                  style="margin-left:4px;"
+                  @click="restoreLocalFile(lf)"
+                  title="Kembalikan file ke Hot Storage"
+                >
+                  Pulihkan ke Aktif
+                </button>
+
+                <!-- Toggle Pin (Jangan arsipkan) -->
+                <button
+                  v-if="canEdit"
+                  class="btn-icon"
+                  style="margin-left:4px;"
+                  :title="lf.pinned ? 'Lepas Pin' : 'Pin agar tidak diarsipkan'"
+                  @click="togglePinLocalFile(lf)"
+                >
+                  {{ lf.pinned ? '📌' : '📍' }}
+                </button>
+
+                <!-- Hapus File Lokal -->
+                <button
+                  v-if="canEdit"
+                  class="btn-icon danger"
+                  style="margin-left:4px;"
+                  title="Hapus file lokal"
+                  @click="deleteLocalFile(lf)"
+                >
+                  🗑️
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -448,6 +589,16 @@ const tahapanFormLoading = ref(false)
 const tahapanFormError = ref('')
 const tahapanForm = ref({ label: '', deskripsi: '', icon: '📋' })
 
+// State Local Files (Server Storage)
+const localFiles = ref([])
+const loadingLocalFiles = ref(false)
+const uploadingLocal = ref(false)
+const selectedLocalIds = ref([])
+const zippingLocal = ref(false)
+const compressingBatch = ref(false)
+const compressingLocalId = ref(null)
+const extractingLocalId = ref(null)
+
 // Computed: Bidang Aktif
 const currentBidang = computed(() => {
   // Mode baru: bidangId prop (dari route /dashboard/modul/:bidangId)
@@ -478,6 +629,17 @@ const roleDisplayLabel = computed(() => {
     return canEdit.value ? 'Admin Bidang Ini' : 'Admin Bidang Lain'
   }
   return 'Viewer (Akses Baca)'
+})
+
+// Computed Local Files: filter by currentBidang
+const filteredLocalFiles = computed(() => {
+  if (!currentBidang.value?.id) return []
+  return localFiles.value.filter(f => f.bidang_id === currentBidang.value.id)
+})
+
+const isAllLocalSelected = computed(() => {
+  if (filteredLocalFiles.value.length === 0) return false
+  return filteredLocalFiles.value.every(f => selectedLocalIds.value.includes(f.id))
 })
 
 // Filter Dokumen: Gabungan Kata Kunci (searchQuery) DAN Kategori Tahapan (selectedTahapanFilter)
@@ -793,6 +955,190 @@ function getFileIconEmoji(mimeType) {
   return '📁'
 }
 
+function getLocalFileEmoji(mimeType) {
+  if (!mimeType) return '📎'
+  if (mimeType.includes('pdf')) return '📄'
+  if (mimeType.includes('image')) return '🖼️'
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) return '📊'
+  if (mimeType.includes('wordprocessing') || mimeType.includes('word') || mimeType.includes('msword')) return '📝'
+  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return '📑'
+  if (mimeType.includes('zip') || mimeType.includes('archive') || mimeType.includes('compressed')) return '📦'
+  if (mimeType.includes('video')) return '🎬'
+  if (mimeType.includes('audio')) return '🎵'
+  return '📎'
+}
+
+function isCompressible(mimeType, fileName) {
+  if (!mimeType && !fileName) return false
+  const name = (fileName || '').toLowerCase()
+  const mime = (mimeType || '').toLowerCase()
+  return mime.includes('image/') ||
+    mime.includes('pdf') ||
+    name.endsWith('.jpg') || name.endsWith('.jpeg') ||
+    name.endsWith('.png') || name.endsWith('.pdf')
+}
+
+function formatSize(bytes) {
+  if (bytes == null || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+// ─── Local Files Functions ────────────────────────────────────────────────
+async function fetchLocalFiles() {
+  if (!currentBidang.value?.id) return
+  loadingLocalFiles.value = true
+  try {
+    const res = await axios.get(`${API}/local-files`, {
+      params: { bidang_id: currentBidang.value.id }
+    })
+    localFiles.value = res.data.files || []
+  } catch (err) {
+    showToast('Gagal memuat file lokal.', 'error')
+  } finally {
+    loadingLocalFiles.value = false
+  }
+}
+
+async function handleUploadLocalFiles(event) {
+  const files = event.target.files
+  if (!files || files.length === 0) return
+  if (!currentBidang.value?.id) return
+  uploadingLocal.value = true
+  try {
+    const formData = new FormData()
+    formData.append('bidang_id', currentBidang.value.id)
+    for (const f of files) formData.append('files', f)
+    await axios.post(`${API}/local-files/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    showToast(`${files.length} file berhasil diunggah.`, 'success')
+    event.target.value = ''
+    await fetchLocalFiles()
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal mengunggah file.', 'error')
+  } finally {
+    uploadingLocal.value = false
+  }
+}
+
+async function downloadLocalFile(lf) {
+  extractingLocalId.value = lf.id
+  try {
+    const res = await axios.get(`${API}/local-files/${lf.id}/download`, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = lf.original_name
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal mengunduh file.', 'error')
+  } finally {
+    extractingLocalId.value = null
+  }
+}
+
+async function downloadLocalZipBatch() {
+  if (selectedLocalIds.value.length === 0) return
+  zippingLocal.value = true
+  try {
+    const res = await axios.post(`${API}/local-files/zip-download`,
+      { file_ids: selectedLocalIds.value },
+      { responseType: 'blob' }
+    )
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `arsip_lokal_${Date.now()}.zip`
+    a.click()
+    URL.revokeObjectURL(url)
+    selectedLocalIds.value = []
+    showToast('File ZIP berhasil diunduh.', 'success')
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal membuat file ZIP.', 'error')
+  } finally {
+    zippingLocal.value = false
+  }
+}
+
+async function compressMediaSingle(lf) {
+  compressingLocalId.value = lf.id
+  try {
+    const res = await axios.post(`${API}/local-files/${lf.id}/compress-media`)
+    if (res.data.success) {
+      showToast(`${lf.original_name}: dikompres -${res.data.percent_saved}%`, 'success')
+    } else {
+      showToast(res.data.message || 'Ukuran sudah optimal.', 'success')
+    }
+    await fetchLocalFiles()
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal mengompresi file.', 'error')
+  } finally {
+    compressingLocalId.value = null
+  }
+}
+
+async function compressMediaBatchAction() {
+  if (selectedLocalIds.value.length === 0) return
+  compressingBatch.value = true
+  try {
+    const res = await axios.post(`${API}/local-files/compress-media-batch`,
+      { file_ids: selectedLocalIds.value }
+    )
+    const processed = res.data.processed || []
+    const saved = processed.filter(p => p.compressed).length
+    showToast(`Kompresi selesai: ${saved}/${processed.length} file berhasil dikompres.`, 'success')
+    selectedLocalIds.value = []
+    await fetchLocalFiles()
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal kompresi batch.', 'error')
+  } finally {
+    compressingBatch.value = false
+  }
+}
+
+async function restoreLocalFile(lf) {
+  try {
+    await axios.post(`${API}/local-files/${lf.id}/restore`)
+    showToast('File berhasil dipulihkan ke aktif.', 'success')
+    await fetchLocalFiles()
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal memulihkan file.', 'error')
+  }
+}
+
+async function togglePinLocalFile(lf) {
+  try {
+    const res = await axios.post(`${API}/local-files/${lf.id}/pin`)
+    showToast(res.data.message || 'Pin diperbarui.', 'success')
+    await fetchLocalFiles()
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal mengubah pin.', 'error')
+  }
+}
+
+async function deleteLocalFile(lf) {
+  if (!confirm(`Hapus file "${lf.original_name}" secara permanen dari server?`)) return
+  try {
+    await axios.delete(`${API}/local-files/${lf.id}`)
+    showToast('File lokal berhasil dihapus.', 'success')
+    await fetchLocalFiles()
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal menghapus file.', 'error')
+  }
+}
+
+function toggleSelectAllLocal(event) {
+  if (event.target.checked) {
+    selectedLocalIds.value = filteredLocalFiles.value.map(f => f.id)
+  } else {
+    selectedLocalIds.value = []
+  }
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -807,9 +1153,13 @@ function showToast(message, type = 'success') {
 }
 
 // Lifecycle
-onMounted(async () => {
+async function loadAllData() {
   await fetchBidangs()
-  await Promise.all([fetchDriveLinks(), fetchTahapan()])
+  await Promise.all([fetchDriveLinks(), fetchTahapan(), fetchLocalFiles()])
+}
+
+onMounted(async () => {
+  await loadAllData()
 })
 
 onBeforeUnmount(() => {
@@ -832,7 +1182,7 @@ watch(
 
 watch(() => [props.slug, props.bidangId, route.params.bidangId], async () => {
   selectedTahapanFilter.value = 'all'
-  await Promise.all([fetchDriveLinks(), fetchTahapan()])
+  await loadAllData()
 })
 </script>
 

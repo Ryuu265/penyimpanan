@@ -110,6 +110,7 @@
             <div class="caption">{{ file.size || 'Dokumen' }} &middot; {{ formatDate(file.modifiedTime) }}</div>
           </div>
           <div class="explorer-file-actions">
+            <span class="badge" style="font-size:0.65rem;background:#F1F5F9;color:#64748B;cursor:help;" title="File Google Drive: kompresi/arsip tidak tersedia">Google Drive (Tidak dapat di-zip)</span>
             <a :href="file.webViewLink" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-xs" @click.stop>Lihat ↗</a>
             <a v-if="file.webContentLink && file.webContentLink !== '#'" :href="file.webContentLink" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-xs" @click.stop>Unduh ↓</a>
           </div>

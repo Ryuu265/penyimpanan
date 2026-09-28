@@ -14,26 +14,21 @@
       </div>
 
       <nav class="sidebar-nav">
-        <!-- ─── Tahun Anggaran ─────────────────────────────────────── -->
+        <!-- ─── Dropdown Tahun Anggaran ─────────────────────────────── -->
         <div class="nav-section-label">TAHUN ANGGARAN</div>
-
-        <div v-if="appStore.loadingTahun" class="nav-loading">Memuat tahun...</div>
-
-        <div v-else class="year-list">
-          <button
-            v-for="t in appStore.tahunList"
-            :key="t.id"
-            class="year-btn"
-            :class="{ 'year-btn--active': appStore.selectedTahunId === t.id }"
-            @click="selectTahun(t.id)"
+        <div class="year-select-wrap">
+          <select
+            class="year-dropdown"
+            :value="appStore.selectedTahunId"
+            @change="selectTahun($event.target.value)"
+            :disabled="appStore.loadingTahun"
           >
-            <span class="year-btn-icon">📅</span>
-            <span class="year-btn-name">{{ t.nama }}</span>
-            <span class="year-btn-label">{{ t.label }}</span>
-          </button>
-          <div v-if="appStore.tahunList.length === 0" class="nav-empty">
-            Belum ada tahun.<br>Tambah tahun untuk mulai.
-          </div>
+            <option v-if="appStore.loadingTahun" value="">Memuat tahun...</option>
+            <option v-for="t in appStore.tahunList" :key="t.id" :value="t.id">
+              📅 {{ t.nama }} &mdash; {{ t.label || ('TA ' + t.nama) }}
+            </option>
+            <option v-if="appStore.tahunList.length === 0" value="">(Belum ada tahun)</option>
+          </select>
         </div>
 
         <!-- Tombol + Tambah Tahun (hanya superadmin) -->
@@ -88,9 +83,30 @@
         </div>
         <div v-else class="nav-empty">Pilih tahun untuk melihat modul.</div>
 
+        <!-- ─── Fitur Terpadu ──────────────────────────────────────── -->
+        <div class="nav-section-label" style="margin-top:1.1rem;">PENYIMPANAN</div>
+        <router-link to="/dashboard/search" class="nav-item" active-class="nav-item--active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Pencarian Terpadu
+        </router-link>
+        <router-link to="/dashboard/backup" class="nav-item" active-class="nav-item--active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Riwayat Backup
+        </router-link>
+
         <!-- ─── Administrasi (Super Admin Only) ────────────────────── -->
         <template v-if="authStore.isSuperAdmin">
           <div class="nav-section-label" style="margin-top:1.1rem;">ADMINISTRASI</div>
+          <router-link to="/dashboard/archive-manager" class="nav-item" active-class="nav-item--active">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>
+            </svg>
+            Arsip & Kapasitas Disk
+          </router-link>
           <router-link to="/dashboard/users" class="nav-item" active-class="nav-item--active">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
@@ -413,7 +429,31 @@ onMounted(async () => {
   line-height: 1.45;
 }
 
-/* ─── Year buttons ────────────────────────────────────────────────── */
+/* ─── Year Dropdown ─────────────────────────────────────────────── */
+.year-select-wrap {
+  padding: 0.2rem 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.year-dropdown {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.year-dropdown:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(91, 200, 168, 0.2);
+}
+
 .year-list {
   display: flex;
   flex-direction: column;

@@ -74,6 +74,41 @@ db.exec(`
     value TEXT NOT NULL,
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS local_files (
+    id TEXT PRIMARY KEY,
+    tahun_id TEXT REFERENCES tahun(id) ON DELETE SET NULL,
+    bidang_id TEXT NOT NULL REFERENCES bidang(id) ON DELETE CASCADE,
+    tahapan_id TEXT REFERENCES tahapan(id) ON DELETE SET NULL,
+    folder_path TEXT NOT NULL DEFAULT '',
+    original_name TEXT NOT NULL,
+    stored_name TEXT NOT NULL,
+    mime_type TEXT,
+    size INTEGER NOT NULL DEFAULT 0,
+    original_size INTEGER NOT NULL DEFAULT 0,
+    location TEXT NOT NULL DEFAULT 'hot' CHECK(location IN ('hot', 'archive')),
+    hot_path TEXT,
+    archive_path TEXT,
+    checksum TEXT,
+    compressed INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
+    uploaded_by TEXT NOT NULL,
+    user_id TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS backups (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    filepath TEXT NOT NULL,
+    size INTEGER NOT NULL DEFAULT 0,
+    checksum TEXT,
+    type TEXT NOT NULL DEFAULT 'daily',
+    created_by TEXT NOT NULL DEFAULT 'system',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // ─── Migrasi aman ──────────────────────────────────────────────────────────
@@ -219,6 +254,13 @@ function seedSettings() {
     { key: 'keepalive_last_ping', value: '' },
     { key: 'keepalive_last_status', value: 'Belum ada ping' },
     { key: 'keepalive_ping_count', value: '0' },
+    { key: 'archive_lifecycle_days', value: '30' },
+    { key: 'archive_lifecycle_time', value: '01:00' },
+    { key: 'archive_lifecycle_enabled', value: '1' },
+    { key: 'backup_time', value: '01:30' },
+    { key: 'backup_enabled', value: '1' },
+    { key: 'backup_retention_days', value: '7' },
+    { key: 'backup_retention_weeks', value: '4' },
   ];
 
   const stmt = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

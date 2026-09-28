@@ -39,6 +39,23 @@ const router = createRouter({
           component: () => import('../views/BidangView.vue'),
           props: { slug: 'palev' }
         },
+        // ─── Fitur Baru: Search Terpadu, Arsip Lokal & Backup ─────────────
+        {
+          path: 'search',
+          name: 'Search',
+          component: () => import('../views/SearchView.vue'),
+        },
+        {
+          path: 'backup',
+          name: 'Backup',
+          component: () => import('../views/BackupView.vue'),
+        },
+        {
+          path: 'archive-manager',
+          name: 'ArchiveManager',
+          component: () => import('../views/ArchiveManagerView.vue'),
+          meta: { requiresSuperAdmin: true }
+        },
         // ─── Admin & Logs ─────────────────────────────────────────────────
         {
           path: 'users',
