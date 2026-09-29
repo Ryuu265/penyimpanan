@@ -1,0 +1,17 @@
+diff --git a/server/db.js b/server/db.js
+index e2ce261..ad849fc 100644
+--- a/server/db.js
++++ b/server/db.js
+@@ -2,7 +2,11 @@ const Database = require('better-sqlite3');
+ const path = require('path');
+ const bcrypt = require('bcryptjs');
+ 
+-const DB_PATH = path.join(__dirname, 'pusat_data.db');
++const fs = require('fs');
++
++// Lokasi database bisa diatur lewat env DB_PATH (mis. /data/pusat_data.db di Railway Volume)
++const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'pusat_data.db');
++fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+ const db = new Database(DB_PATH);
+ 
+ // Enable WAL mode for better performance
