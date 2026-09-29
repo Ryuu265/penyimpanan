@@ -259,6 +259,27 @@ function getDiskCapacity(targetPath = '.') {
   }
 }
 
+// Sanitasi nama folder / file agar aman dari path traversal dan karakter ilegal OS
+function sanitizePathSegment(name) {
+  if (!name || typeof name !== 'string') return 'folder';
+  let clean = name.replace(/[/\\?%*:|"<>]/g, '_').trim();
+  clean = clean.replace(/\.{2,}/g, '_');
+  clean = clean.replace(/^\.+/, '').trim();
+  return clean || 'folder';
+}
+
+// Menghasilkan direktori fisik tahapan: Tahun_{tahun}/{bidang}/{tahapan_label}_{tahapan_id}
+function getTahapanDir(tahunNama, bidangNama, tahapanLabel, tahapanId) {
+  const safeTahun = sanitizePathSegment(tahunNama ? `Tahun_${tahunNama}` : 'Tahun_Umum');
+  const safeBidang = sanitizePathSegment(bidangNama || 'Umum');
+  const safeLabel = sanitizePathSegment(tahapanLabel || 'Tahapan');
+  const tahapanFolder = tahapanId ? `${safeLabel}_${tahapanId}` : safeLabel;
+  const relPath = path.join(safeTahun, safeBidang, tahapanFolder);
+  const fullPath = path.join(getHotStoragePath(), relPath);
+  ensureDirSync(fullPath);
+  return { relPath, fullPath };
+}
+
 module.exports = {
   getHotStoragePath,
   getArchiveStoragePath,
@@ -274,4 +295,7 @@ module.exports = {
   compressMediaFile,
   getDirectorySize,
   getDiskCapacity,
+  sanitizePathSegment,
+  getTahapanDir,
 };
+

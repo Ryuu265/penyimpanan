@@ -62,20 +62,31 @@ if (fs.existsSync(distPath)) {
 const keepAliveService = require('./services/keepAlive');
 const storageService = require('./services/storageService');
 const schedulerService = require('./services/schedulerService');
+const { initDb } = require('./db');
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Pusat Data Bapperida API Server`);
-  console.log(`   Running at: http://localhost:${PORT}`);
-  console.log(`   Health:     http://localhost:${PORT}/api/health\n`);
-  
-  // Inisialisasi direktori penyimpanan lokal (hot, archive, backup, cache)
-  storageService.initStorageDirs();
+// Inisialisasi database PostgreSQL sebelum server mulai listen
+(async () => {
+  try {
+    await initDb();
+  } catch (err) {
+    console.error('❌ Gagal inisialisasi database:', err);
+    process.exit(1);
+  }
 
-  // Inisialisasi Auto-Reset / Keep-Alive Service
-  keepAliveService.init();
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🚀 Pusat Data Bapperida API Server`);
+    console.log(`   Running at: http://localhost:${PORT}`);
+    console.log(`   Health:     http://localhost:${PORT}/api/health\n`);
+    
+    // Inisialisasi direktori penyimpanan lokal (hot, archive, backup, cache)
+    storageService.initStorageDirs();
 
-  // Inisialisasi Scheduler Arsip & Backup Otomatis
-  schedulerService.initScheduler();
-});
+    // Inisialisasi Auto-Reset / Keep-Alive Service
+    keepAliveService.init();
+
+    // Inisialisasi Scheduler Arsip & Backup Otomatis
+    schedulerService.initScheduler();
+  });
+})();
 
 module.exports = app;

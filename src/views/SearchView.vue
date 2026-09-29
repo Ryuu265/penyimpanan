@@ -289,11 +289,28 @@ async function restoreFile(item) {
 
 async function downloadSelectedZip() {
   if (selectedFileIds.value.length === 0) return
+
+  // Pisahkan file lokal dan drive link
+  const localItems = results.value.filter(r => r.sumber === 'local' && selectedFileIds.value.includes(r.id))
+  const driveItems = results.value.filter(r => r.sumber === 'drive' && selectedFileIds.value.includes(r.id))
+  const localIds = localItems.map(r => r.id)
+  const driveCount = driveItems.length
+
+  if (localIds.length === 0) {
+    showToast('Hanya file penyimpanan lokal yang dapat dikompres.', 'error')
+    return
+  }
+
+  if (driveCount > 0) {
+    showToast(`${localIds.length} file lokal dikompres, ${driveCount} file Google Drive dilewati.`, 'info')
+  } else {
+    showToast('Menyiapkan file ZIP kompresi...', 'info')
+  }
+
   zipping.value = true
-  showToast('Menyiapkan file ZIP kompresi...', 'info')
   try {
     const response = await axios.post(`${API}/local-files/zip-download`, {
-      file_ids: selectedFileIds.value
+      file_ids: localIds
     }, {
       responseType: 'blob'
     })

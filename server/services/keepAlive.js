@@ -1,12 +1,12 @@
 const http = require('http');
-const db = require('../db');
+const pool = require('../db');
 
 let timerInterval = null;
 let isPinging = false;
 
-// Ambil konfigurasi saat ini dari SQLite
-function getSettings() {
-  const rows = db.prepare('SELECT key, value FROM settings').all();
+// Ambil konfigurasi saat ini dari PostgreSQL
+async function getSettings() {
+  const { rows } = await pool.query('SELECT key, value FROM settings');
   const map = {};
   for (const r of rows) {
     map[r.key] = r.value;
@@ -23,31 +23,31 @@ function getSettings() {
   };
 }
 
-// Simpan konfigurasi ke SQLite
-function setSetting(key, value) {
-  db.prepare(`
-    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
-  `).run(key, String(value));
+// Simpan konfigurasi ke PostgreSQL
+async function setSetting(key, value) {
+  await pool.query(`
+    INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW())
+    ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+  `, [key, String(value)]);
 }
 
-function updateConfig({ active, interval_minutes, schedule_enabled, work_start, work_end }) {
+async function updateConfig({ active, interval_minutes, schedule_enabled, work_start, work_end }) {
   if (active !== undefined) {
-    setSetting('keepalive_active', active ? '1' : '0');
+    await setSetting('keepalive_active', active ? '1' : '0');
   }
   if (interval_minutes !== undefined) {
-    setSetting('keepalive_interval', Math.max(1, parseInt(interval_minutes, 10) || 10));
+    await setSetting('keepalive_interval', Math.max(1, parseInt(interval_minutes, 10) || 10));
   }
   if (schedule_enabled !== undefined) {
-    setSetting('keepalive_schedule_enabled', schedule_enabled ? '1' : '0');
+    await setSetting('keepalive_schedule_enabled', schedule_enabled ? '1' : '0');
   }
   if (work_start !== undefined) {
-    setSetting('keepalive_work_start', work_start);
+    await setSetting('keepalive_work_start', work_start);
   }
   if (work_end !== undefined) {
-    setSetting('keepalive_work_end', work_end);
+    await setSetting('keepalive_work_end', work_end);
   }
-  return getStatus();
+  return await getStatus();
 }
 
 function isWithinWorkHours(startTimeStr, endTimeStr) {
@@ -86,42 +86,50 @@ function performPing(isManual = false) {
     const req = http.request(options, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
+      res.on('end', async () => {
         isPinging = false;
         const nowIso = new Date().toISOString();
-        const settings = getSettings();
-        const newCount = settings.ping_count + 1;
-        const statusMsg = `Berhasil (${res.statusCode} OK)${isManual ? ' [Manual]' : ''}`;
+        try {
+          const settings = await getSettings();
+          const newCount = settings.ping_count + 1;
+          const statusMsg = `Berhasil (${res.statusCode} OK)${isManual ? ' [Manual]' : ''}`;
 
-        setSetting('keepalive_last_ping', nowIso);
-        setSetting('keepalive_last_status', statusMsg);
-        setSetting('keepalive_ping_count', newCount);
+          await setSetting('keepalive_last_ping', nowIso);
+          await setSetting('keepalive_last_status', statusMsg);
+          await setSetting('keepalive_ping_count', newCount);
 
-        console.log(`[KeepAlive] 💓 Self-ping berhasil (${nowIso}) - Status: ${res.statusCode} - Total: ${newCount}`);
-        resolve({ success: true, timestamp: nowIso, statusCode: res.statusCode, count: newCount });
+          console.log(`[KeepAlive] 💓 Self-ping berhasil (${nowIso}) - Status: ${res.statusCode} - Total: ${newCount}`);
+          resolve({ success: true, timestamp: nowIso, statusCode: res.statusCode, count: newCount });
+        } catch (e) {
+          resolve({ success: true, timestamp: nowIso, statusCode: res.statusCode });
+        }
       });
     });
 
-    req.on('error', (err) => {
+    req.on('error', async (err) => {
       isPinging = false;
       const nowIso = new Date().toISOString();
       const statusMsg = `Gagal: ${err.message}${isManual ? ' [Manual]' : ''}`;
 
-      setSetting('keepalive_last_ping', nowIso);
-      setSetting('keepalive_last_status', statusMsg);
+      try {
+        await setSetting('keepalive_last_ping', nowIso);
+        await setSetting('keepalive_last_status', statusMsg);
+      } catch (e) {}
 
       console.warn(`[KeepAlive] ⚠️ Self-ping error:`, err.message);
       resolve({ success: false, timestamp: nowIso, error: err.message });
     });
 
-    req.on('timeout', () => {
+    req.on('timeout', async () => {
       req.destroy();
       isPinging = false;
       const nowIso = new Date().toISOString();
       const statusMsg = `Timeout (5s)${isManual ? ' [Manual]' : ''}`;
 
-      setSetting('keepalive_last_ping', nowIso);
-      setSetting('keepalive_last_status', statusMsg);
+      try {
+        await setSetting('keepalive_last_ping', nowIso);
+        await setSetting('keepalive_last_status', statusMsg);
+      } catch (e) {}
 
       console.warn(`[KeepAlive] ⚠️ Self-ping timeout.`);
       resolve({ success: false, timestamp: nowIso, error: 'Timeout' });
@@ -131,8 +139,8 @@ function performPing(isManual = false) {
   });
 }
 
-function getStatus() {
-  const config = getSettings();
+async function getStatus() {
+  const config = await getSettings();
   const inWorkHours = isWithinWorkHours(config.work_start, config.work_end);
   let effectiveRunning = false;
   let reason = '';
@@ -159,17 +167,21 @@ function getStatus() {
 
 // Tick runner yang dipanggil setiap menit
 async function checkAndRunTick() {
-  const status = getStatus();
-  if (!status.effective_running) {
-    return;
-  }
+  try {
+    const status = await getStatus();
+    if (!status.effective_running) {
+      return;
+    }
 
-  const lastPingTime = status.last_ping ? new Date(status.last_ping).getTime() : 0;
-  const now = Date.now();
-  const intervalMs = (status.interval_minutes || 10) * 60 * 1000;
+    const lastPingTime = status.last_ping ? new Date(status.last_ping).getTime() : 0;
+    const now = Date.now();
+    const intervalMs = (status.interval_minutes || 10) * 60 * 1000;
 
-  if (now - lastPingTime >= intervalMs) {
-    await performPing(false);
+    if (now - lastPingTime >= intervalMs) {
+      await performPing(false);
+    }
+  } catch (err) {
+    console.error('[KeepAlive] Error during tick:', err.message);
   }
 }
 

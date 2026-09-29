@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const db = require('../db');
+const pool = require('../db');
 const { runArchiveLifecycle } = require('./archiveService');
 const { createFullBackup } = require('./backupService');
 const { cleanOldCache } = require('./storageService');
@@ -15,12 +15,17 @@ function convertTimeToCron(timeStr, defaultCron = '0 1 * * *') {
   return `${minute} ${hour} * * *`;
 }
 
-function initScheduler() {
+async function initScheduler() {
   stopScheduler();
 
   // 1. Lifecycle Archive Cron (Default jam 01.00 WIB)
-  const timeSetting = db.prepare("SELECT value FROM settings WHERE key = 'archive_lifecycle_time'").get();
-  const archiveCronExpr = convertTimeToCron(timeSetting?.value, '0 1 * * *');
+  let archiveCronExpr = '0 1 * * *';
+  try {
+    const { rows: tRows } = await pool.query("SELECT value FROM settings WHERE key = 'archive_lifecycle_time'");
+    archiveCronExpr = convertTimeToCron(tRows[0]?.value, '0 1 * * *');
+  } catch (err) {
+    console.warn('Gagal membaca setting archive_lifecycle_time:', err.message);
+  }
 
   try {
     archiveTask = cron.schedule(archiveCronExpr, async () => {
@@ -39,16 +44,21 @@ function initScheduler() {
   }
 
   // 2. Backup Otomatis Harian Cron (Default jam 01.30 WIB)
-  const backupTimeSetting = db.prepare("SELECT value FROM settings WHERE key = 'backup_time'").get();
-  const backupCronExpr = convertTimeToCron(backupTimeSetting?.value, '30 1 * * *');
+  let backupCronExpr = '30 1 * * *';
+  try {
+    const { rows: bRows } = await pool.query("SELECT value FROM settings WHERE key = 'backup_time'");
+    backupCronExpr = convertTimeToCron(bRows[0]?.value, '30 1 * * *');
+  } catch (err) {
+    console.warn('Gagal membaca setting backup_time:', err.message);
+  }
 
   try {
     backupTask = cron.schedule(backupCronExpr, async () => {
-      const enabled = db.prepare("SELECT value FROM settings WHERE key = 'backup_enabled'").get();
-      if (enabled && enabled.value === '0') return;
-
-      console.log(`[Cron ${new Date().toISOString()}] Menjalankan Backup Harian Otomatis...`);
       try {
+        const { rows: enRows } = await pool.query("SELECT value FROM settings WHERE key = 'backup_enabled'");
+        if (enRows[0] && enRows[0].value === '0') return;
+
+        console.log(`[Cron ${new Date().toISOString()}] Menjalankan Backup Harian Otomatis...`);
         const b = await createFullBackup('scheduler', 'daily');
         console.log(`[Cron Backup Selesai] File: ${b.filename}, Ukuran: ${b.size}`);
       } catch (err) {

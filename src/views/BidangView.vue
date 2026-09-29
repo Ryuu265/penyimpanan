@@ -166,8 +166,11 @@
           </div>
         </div>
         <div class="tab-actions">
-          <button v-if="canAdd" class="btn btn-primary btn-sm" @click="openAddModal(selectedTahapanObj.id)">
+          <button v-if="canAdd" class="btn btn-primary btn-sm" @click="openAddLocalFolderModal(selectedTahapanObj.id)">
             + Tambah Folder {{ selectedTahapanObj.label }}
+          </button>
+          <button v-if="canAdd" class="btn btn-outline btn-sm" @click="openImportGDriveModal(selectedTahapanObj.id)">
+            📥 Salin dari Google Drive
           </button>
           <button class="btn btn-outline btn-sm" @click="selectedTahapanFilter = 'all'">
             ✕ Tampilkan Semua
@@ -175,13 +178,19 @@
         </div>
       </div>
 
+      <!-- Filter Folder Aktif -->
+      <div v-if="selectedLocalFolderFilter" style="margin-bottom:0.75rem;padding:0.4rem 0.8rem;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;font-size:0.85rem;">
+        <span>📁 Menyaring file dalam folder: <strong>{{ selectedLocalFolderFilter }}</strong></span>
+        <button class="btn-link" @click="selectedLocalFolderFilter = null" style="font-size:0.8rem;color:var(--color-primary);cursor:pointer;background:none;border:none;font-weight:600;">✕ Hapus Filter Folder</button>
+      </div>
+
       <!-- Loading State Folders -->
-      <div v-if="loadingLinks" class="empty-state">
+      <div v-if="loadingFolders || loadingLinks" class="empty-state">
         <p>Memuat daftar folder...</p>
       </div>
 
       <!-- Empty State Folders -->
-      <div v-else-if="filteredLinks.length === 0" class="empty-state">
+      <div v-else-if="filteredLocalFolders.length === 0 && filteredLinks.length === 0" class="empty-state">
         <div class="empty-icon-wrap" style="font-size: 2.2rem; margin-bottom: 0.5rem;">📂</div>
         <p v-if="selectedTahapanObj">
           Belum ada folder dokumen untuk tahapan <strong>{{ selectedTahapanObj.label }}</strong>.
@@ -192,13 +201,31 @@
         <p v-else>
           Belum ada folder dokumen yang ditambahkan untuk bidang ini.
         </p>
-        <button v-if="canAdd" class="btn btn-primary btn-sm" style="margin-top: 0.8rem;" @click="openAddModal()">
-          + Tambah Folder Dokumen
-        </button>
+        <div v-if="canAdd" style="display:flex;gap:0.5rem;justify-content:center;margin-top:0.8rem;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" @click="openAddLocalFolderModal(selectedTahapanObj?.id)">
+            + Tambah Folder Lokal
+          </button>
+          <button class="btn btn-outline btn-sm" @click="openImportGDriveModal(selectedTahapanObj?.id)">
+            📥 Salin dari Google Drive
+          </button>
+        </div>
       </div>
 
       <!-- Grid Folder Card -->
       <div v-else class="folder-grid">
+        <!-- Local Folders (Penyimpanan Lokal Server) -->
+        <LocalFolderCard
+          v-for="folder in filteredLocalFolders"
+          :key="folder.id"
+          :folder="folder"
+          :can-edit="canEdit"
+          @click-folder="filterFilesByFolder(folder)"
+          @upload-files="triggerFolderUpload(folder)"
+          @edit="openEditLocalFolderModal(folder)"
+          @delete="confirmDeleteLocalFolder(folder)"
+        />
+
+        <!-- Google Drive Links (jika ada tautan Google Drive) -->
         <FolderCard
           v-for="link in filteredLinks"
           :key="link.id"
@@ -207,13 +234,26 @@
           @click-folder="openFolderFiles(link)"
           @edit="openEditModal(link)"
           @delete="confirmDelete(link)"
+          @copy-to-local="openImportForDriveLink(link)"
         />
       </div>
 
-      <!-- Tombol "+ Tambah" di Bagian Bawah (Sesuai Posisi di Sketsa, Admin Only) -->
-      <div v-if="canAdd" class="bottom-action-area">
-        <button class="btn btn-primary btn-lg" @click="openAddModal()">
-          + Tambah Folder Google Drive
+      <!-- Hidden file input untuk upload langsung ke folder -->
+      <input
+        ref="folderFileInputRef"
+        type="file"
+        multiple
+        @change="handleFolderUploadChange"
+        style="display:none;"
+      />
+
+      <!-- Tombol Aksi di Bagian Bawah -->
+      <div v-if="canAdd" class="bottom-action-area" style="display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-md" @click="openAddLocalFolderModal(selectedTahapanObj?.id)">
+          + Tambah Folder {{ selectedTahapanObj ? selectedTahapanObj.label : 'Lokal' }}
+        </button>
+        <button class="btn btn-outline btn-md" @click="openImportGDriveModal(selectedTahapanObj?.id)">
+          📥 Salin dari Google Drive ke Lokal
         </button>
       </div>
     </section>
@@ -359,12 +399,166 @@
       </div>
     </section>
 
-    <!-- MODAL: Tambah / Edit Folder Google Drive -->
+    <!-- MODAL: Tambah / Edit Folder Lokal Server -->
+    <Teleport to="body">
+      <div v-if="showLocalFolderModal" class="modal-overlay" @click.self="closeLocalFolderModal">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3>{{ editingLocalFolder ? 'Edit Nama Folder Lokal' : 'Tambah Folder Penyimpanan Lokal' }}</h3>
+            <button class="btn-icon" @click="closeLocalFolderModal">✕</button>
+          </div>
+          <form @submit.prevent="submitLocalFolderForm">
+            <div class="form-group">
+              <label>Nama Folder <span class="text-danger">*</span></label>
+              <input v-model="localFolderForm.nama_folder" placeholder="contoh: RPJMD 2025, Dinas Kesehatan, dll." required />
+              <p class="caption">Nama folder akan disanitasi secara otomatis untuk nama direktori fisik server.</p>
+            </div>
+
+            <div class="form-group">
+              <label>Kategori Tahapan <span class="text-danger">*</span></label>
+              <select v-model="localFolderForm.tahapan_id" class="form-select" required>
+                <option value="" disabled>-- Pilih Tahapan --</option>
+                <option v-for="t in tahapanList" :key="t.id" :value="t.id">
+                  {{ t.label }} {{ t.deskripsi ? `— ${t.deskripsi}` : '' }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="localFolderFormError" class="error-alert">
+              {{ localFolderFormError }}
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline" @click="closeLocalFolderModal">Batal</button>
+              <button type="submit" class="btn btn-primary" :disabled="localFolderFormLoading">
+                {{ editingLocalFolder ? 'Simpan Nama Folder' : 'Buat Folder Lokal' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- MODAL: Salin dari Google Drive ke Server Lokal -->
+    <Teleport to="body">
+      <div v-if="showImportGDriveModal" class="modal-overlay" @click.self="closeImportGDriveModal">
+        <div class="modal-box modal-box--large">
+          <div class="modal-header">
+            <div>
+              <h3>📥 Salin Dokumen dari Google Drive ke Server Lokal</h3>
+              <p class="caption">Unduh dan simpan dokumen dari Google Drive secara permanen ke hot storage server.</p>
+            </div>
+            <button class="btn-icon" @click="closeImportGDriveModal">✕</button>
+          </div>
+
+          <div style="padding: 1rem 0;">
+            <div class="form-group">
+              <label>Link Folder / File Google Drive atau ID <span class="text-danger">*</span></label>
+              <div style="display:flex;gap:0.5rem;">
+                <input v-model="importGDriveForm.drive_url_or_id" placeholder="https://drive.google.com/drive/folders/... atau ID file" style="flex:1;" />
+                <button type="button" class="btn btn-outline btn-sm" @click="inspectDriveLink" :disabled="inspectingDrive">
+                  <span v-if="inspectingDrive">Memeriksa...</span>
+                  <span v-else>🔍 Periksa</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Preview Hasil Pemeriksaan Link -->
+            <div v-if="inspectedDriveInfo" style="margin-bottom:1rem;padding:0.75rem;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:var(--radius-sm);font-size:0.85rem;">
+              <div style="display:flex;align-items:center;gap:0.4rem;font-weight:600;">
+                <span>{{ inspectedDriveInfo.isFolder ? '📁 Folder Drive:' : '📄 File Drive:' }}</span>
+                <span>{{ inspectedDriveInfo.name }}</span>
+              </div>
+              <div class="caption" style="margin-top:0.25rem;">
+                <span v-if="inspectedDriveInfo.isFolder">{{ inspectedDriveInfo.fileCount }} file ditemukan di dalam folder.</span>
+                <span v-else>Ukuran: {{ formatSize(inspectedDriveInfo.size) }}</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Simpan ke Tahapan <span class="text-danger">*</span></label>
+              <select v-model="importGDriveForm.tahapan_id" class="form-select" required>
+                <option value="">-- Umum / Tanpa Tahapan Khusus --</option>
+                <option v-for="t in tahapanList" :key="t.id" :value="t.id">
+                  {{ t.label }} {{ t.deskripsi ? `— ${t.deskripsi}` : '' }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Nama Subfolder Lokal (Opsional)</label>
+              <input v-model="importGDriveForm.folder_name" placeholder="Biarkan kosong untuk menggunakan nama asli dari Drive" />
+            </div>
+
+            <div v-if="importError" class="error-alert">
+              {{ importError }}
+            </div>
+
+            <!-- Progress Indicator -->
+            <div v-if="importingGDrive" style="margin-top:1rem;padding:0.75rem;background:#EFF6FF;border-radius:var(--radius-sm);display:flex;align-items:center;gap:0.75rem;">
+              <div class="spinner" style="width:18px;height:18px;border-width:2.5px;"></div>
+              <div>
+                <strong style="color:#1D4ED8;font-size:0.85rem;">Sedang menyalin dari Google Drive...</strong>
+                <p class="caption" style="margin:0;">File sedang diunduh dan diproses ke penyimpanan server.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" @click="closeImportGDriveModal" :disabled="importingGDrive">Batal</button>
+            <button type="button" class="btn btn-primary" @click="startImportGDrive" :disabled="importingGDrive || !importGDriveForm.drive_url_or_id">
+              {{ importingGDrive ? 'Menyalin...' : 'Mulai Salin ke Lokal' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- MODAL: Hapus Folder Lokal -->
+    <Teleport to="body">
+      <div v-if="deletingLocalFolder" class="modal-overlay" @click.self="deletingLocalFolder = null">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3>Konfirmasi Hapus Folder Lokal</h3>
+            <button class="btn-icon" @click="deletingLocalFolder = null">✕</button>
+          </div>
+
+          <div v-if="folderDeleteData" class="error-alert" style="margin-bottom:0.75rem;">
+            ⚠️ {{ folderDeleteData.message }}
+          </div>
+          <p v-else class="modal-desc">
+            Hapus folder <strong>"{{ deletingLocalFolder.nama_folder }}"</strong> dari sistem dan direktori server?
+          </p>
+
+          <div class="modal-footer">
+            <button class="btn btn-outline" @click="deletingLocalFolder = null; folderDeleteData = null;">Batal</button>
+            <button
+              v-if="folderDeleteData"
+              class="btn btn-danger"
+              @click="executeDeleteLocalFolder(true)"
+              :disabled="localFolderFormLoading"
+            >
+              Hapus Folder & Seluruh Isinya
+            </button>
+            <button
+              v-else
+              class="btn btn-danger"
+              @click="executeDeleteLocalFolder(false)"
+              :disabled="localFolderFormLoading"
+            >
+              Hapus Folder
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- MODAL: Tambah / Edit Folder Google Drive (Legacy) -->
     <Teleport to="body">
       <div v-if="showFolderModal" class="modal-overlay" @click.self="closeFolderModal">
         <div class="modal-box">
           <div class="modal-header">
-            <h3>{{ editingLink ? 'Edit Folder Dokumen' : 'Tambah Folder Dokumen' }}</h3>
+            <h3>{{ editingLink ? 'Edit Link Folder Google Drive' : 'Tambah Link Folder Google Drive' }}</h3>
             <button class="btn-icon" @click="closeFolderModal">✕</button>
           </div>
           <form @submit.prevent="submitFolderForm">
@@ -396,7 +590,7 @@
             <div class="modal-footer">
               <button type="button" class="btn btn-outline" @click="closeFolderModal">Batal</button>
               <button type="submit" class="btn btn-primary" :disabled="formLoading">
-                {{ editingLink ? 'Simpan Perubahan' : 'Tambah Folder' }}
+                {{ editingLink ? 'Simpan Perubahan' : 'Tambah Link' }}
               </button>
             </div>
           </form>
@@ -462,35 +656,53 @@
             <h3>Konfirmasi Hapus Tahapan</h3>
             <button class="btn-icon" @click="deletingTahapan = null">✕</button>
           </div>
-          <p class="modal-desc">
-            Hapus tahapan <strong>"{{ deletingTahapan.label }}"</strong> dari alur proses?
+
+          <div v-if="tahapanDeleteData" class="error-alert" style="margin-bottom:0.75rem;">
+            ⚠️ {{ tahapanDeleteData.message }}
+          </div>
+          <p v-else class="modal-desc">
+            Hapus tahapan <strong>"{{ deletingTahapan.label }}"</strong> dari alur proses beserta direktori fisiknya?
           </p>
+
           <div class="modal-footer">
-            <button class="btn btn-outline" @click="deletingTahapan = null">Batal</button>
-            <button class="btn btn-danger" @click="executeDeleteTahapan" :disabled="tahapanFormLoading">
-              Hapus
+            <button class="btn btn-outline" @click="deletingTahapan = null; tahapanDeleteData = null;">Batal</button>
+            <button
+              v-if="tahapanDeleteData"
+              class="btn btn-danger"
+              @click="executeDeleteTahapan(true)"
+              :disabled="tahapanFormLoading"
+            >
+              Hapus Tahapan & Seluruh Isinya
+            </button>
+            <button
+              v-else
+              class="btn btn-danger"
+              @click="executeDeleteTahapan(false)"
+              :disabled="tahapanFormLoading"
+            >
+              Hapus Tahapan
             </button>
           </div>
         </div>
       </div>
     </Teleport>
 
-    <!-- MODAL: Hapus Folder -->
+    <!-- MODAL: Hapus Folder Google Drive -->
     <Teleport to="body">
       <div v-if="deletingLink" class="modal-overlay" @click.self="deletingLink = null">
         <div class="modal-box">
           <div class="modal-header">
-            <h3>Konfirmasi Hapus Folder</h3>
+            <h3>Konfirmasi Hapus Link Google Drive</h3>
             <button class="btn-icon" @click="deletingLink = null">✕</button>
           </div>
           <p class="modal-desc">
-            Hapus folder <strong>"{{ deletingLink.nama_folder }}"</strong> dari sistem?
+            Hapus tautan folder <strong>"{{ deletingLink.nama_folder }}"</strong> dari sistem?
           </p>
           <p class="caption">File asli di Google Drive tidak akan terhapus.</p>
           <div class="modal-footer">
             <button class="btn btn-outline" @click="deletingLink = null">Batal</button>
             <button class="btn btn-danger" @click="executeDelete" :disabled="formLoading">
-              Hapus Folder
+              Hapus Link
             </button>
           </div>
         </div>
@@ -542,6 +754,7 @@ import Sortable from 'sortablejs'
 import { useAuthStore } from '../stores/auth'
 import FolderCard from '../components/FolderCard.vue'
 import FolderExplorer from '../components/FolderExplorer.vue'
+import LocalFolderCard from '../components/LocalFolderCard.vue'
 
 const props = defineProps({
   slug: String,      // legacy: 'perencanaan' | 'palev'
@@ -569,7 +782,29 @@ const loadingTahapan = ref(true)
 const flowContainerRef = ref(null)
 let sortableInstance = null
 
-// Modals Folder
+// State Folder Lokal
+const localFolders = ref([])
+const loadingFolders = ref(false)
+const selectedLocalFolderFilter = ref(null)
+const showLocalFolderModal = ref(false)
+const editingLocalFolder = ref(null)
+const deletingLocalFolder = ref(null)
+const folderDeleteData = ref(null)
+const localFolderForm = ref({ nama_folder: '', tahapan_id: '' })
+const localFolderFormError = ref('')
+const localFolderFormLoading = ref(false)
+const folderFileInputRef = ref(null)
+const targetFolderUpload = ref(null)
+
+// State Salin dari Google Drive
+const showImportGDriveModal = ref(false)
+const importGDriveForm = ref({ drive_url_or_id: '', tahapan_id: '', folder_name: '' })
+const inspectingDrive = ref(false)
+const inspectedDriveInfo = ref(null)
+const importingGDrive = ref(false)
+const importError = ref('')
+
+// Modals Folder Google Drive (Legacy)
 const showFolderModal = ref(false)
 const editingLink = ref(null)
 const deletingLink = ref(null)
@@ -585,6 +820,7 @@ const folderForm = ref({ nama_folder: '', drive_folder_url: '', tahapan_id: '' }
 const showTahapanModal = ref(false)
 const editingTahapan = ref(null)
 const deletingTahapan = ref(null)
+const tahapanDeleteData = ref(null)
 const tahapanFormLoading = ref(false)
 const tahapanFormError = ref('')
 const tahapanForm = ref({ label: '', deskripsi: '', icon: '📋' })
@@ -631,10 +867,51 @@ const roleDisplayLabel = computed(() => {
   return 'Viewer (Akses Baca)'
 })
 
-// Computed Local Files: filter by currentBidang
+// Computed Local Files: filter by currentBidang, selectedTahapanFilter, selectedLocalFolderFilter, & search
 const filteredLocalFiles = computed(() => {
   if (!currentBidang.value?.id) return []
-  return localFiles.value.filter(f => f.bidang_id === currentBidang.value.id)
+  let files = localFiles.value.filter(f => f.bidang_id === currentBidang.value.id)
+
+  if (selectedTahapanFilter.value === 'umum') {
+    files = files.filter(f => !f.tahapan_id)
+  } else if (selectedTahapanFilter.value && selectedTahapanFilter.value !== 'all') {
+    files = files.filter(f => f.tahapan_id === selectedTahapanFilter.value)
+  }
+
+  if (selectedLocalFolderFilter.value) {
+    files = files.filter(f => f.folder_path === selectedLocalFolderFilter.value || (f.folder_path && f.folder_path.startsWith(selectedLocalFolderFilter.value + '/')))
+  }
+
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.toLowerCase()
+    files = files.filter(f =>
+      f.original_name.toLowerCase().includes(q) ||
+      (f.nama_tahapan && f.nama_tahapan.toLowerCase().includes(q)) ||
+      (f.folder_path && f.folder_path.toLowerCase().includes(q))
+    )
+  }
+
+  return files
+})
+
+// Computed Local Folders: filter by currentBidang & selectedTahapanFilter & search
+const filteredLocalFolders = computed(() => {
+  if (!currentBidang.value?.id) return []
+  let folders = localFolders.value.filter(f => f.bidang_id === currentBidang.value.id)
+
+  if (selectedTahapanFilter.value && selectedTahapanFilter.value !== 'all') {
+    folders = folders.filter(f => f.tahapan_id === selectedTahapanFilter.value)
+  }
+
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.toLowerCase()
+    folders = folders.filter(f =>
+      f.nama_folder.toLowerCase().includes(q) ||
+      (f.nama_tahapan && f.nama_tahapan.toLowerCase().includes(q))
+    )
+  }
+
+  return folders
 })
 
 const isAllLocalSelected = computed(() => {
@@ -672,8 +949,11 @@ const selectedTahapanObj = computed(() => {
 })
 
 function getFolderCountForTahapan(tahapanId) {
-  if (!currentBidang.value?.id) return 0
-  return driveLinks.value.filter(l => l.bidang_id === currentBidang.value.id && l.tahapan_id === tahapanId).length
+  const step = tahapanList.value.find(t => t.id === tahapanId)
+  if (step && typeof step.folder_count === 'number') {
+    return step.folder_count
+  }
+  return localFolders.value.filter(f => f.tahapan_id === tahapanId).length
 }
 
 function selectTahapan(step) {
@@ -833,19 +1113,268 @@ function confirmDeleteTahapan(step) {
   deletingTahapan.value = step
 }
 
-async function executeDeleteTahapan() {
+async function executeDeleteTahapan(force = false) {
   if (!deletingTahapan.value) return
   tahapanFormLoading.value = true
 
   try {
-    await axios.delete(`${API}/tahapan/${deletingTahapan.value.id}`)
+    const url = `${API}/tahapan/${deletingTahapan.value.id}${force ? '?force=1' : ''}`
+    await axios.delete(url)
     showToast('Tahapan berhasil dihapus.', 'success')
     deletingTahapan.value = null
-    await fetchTahapan()
+    tahapanDeleteData.value = null
+    await Promise.all([fetchTahapan(), fetchLocalFolders(), fetchLocalFiles()])
   } catch (err) {
-    showToast(err.response?.data?.error || 'Gagal menghapus tahapan.', 'error')
+    if (err.response?.status === 409 && err.response?.data?.needs_confirm) {
+      tahapanDeleteData.value = err.response.data
+    } else {
+      showToast(err.response?.data?.error || 'Gagal menghapus tahapan.', 'error')
+    }
   } finally {
     tahapanFormLoading.value = false
+  }
+}
+
+// ─── LOCAL FOLDERS HANDLERS ────────────────────────────────────────────────
+async function fetchLocalFolders() {
+  if (!currentBidang.value?.id) return
+  loadingFolders.value = true
+  try {
+    const res = await axios.get(`${API}/tahapan/folders/all`, {
+      params: { bidang_id: currentBidang.value.id }
+    })
+    localFolders.value = res.data.folders || []
+  } catch (err) {
+    localFolders.value = []
+  } finally {
+    loadingFolders.value = false
+  }
+}
+
+function openAddLocalFolderModal(prefillTahapanId = null) {
+  editingLocalFolder.value = null
+  let defaultTahapan = ''
+  if (typeof prefillTahapanId === 'string' && prefillTahapanId) {
+    defaultTahapan = prefillTahapanId
+  } else if (selectedTahapanFilter.value && selectedTahapanFilter.value !== 'all' && selectedTahapanFilter.value !== 'umum') {
+    defaultTahapan = selectedTahapanFilter.value
+  } else if (tahapanList.value.length > 0) {
+    defaultTahapan = tahapanList.value[0].id
+  }
+  localFolderForm.value = { nama_folder: '', tahapan_id: defaultTahapan }
+  localFolderFormError.value = ''
+  showLocalFolderModal.value = true
+}
+
+function openEditLocalFolderModal(folder) {
+  editingLocalFolder.value = folder
+  localFolderForm.value = {
+    nama_folder: folder.nama_folder,
+    tahapan_id: folder.tahapan_id
+  }
+  localFolderFormError.value = ''
+  showLocalFolderModal.value = true
+}
+
+function closeLocalFolderModal() {
+  showLocalFolderModal.value = false
+  editingLocalFolder.value = null
+  localFolderFormError.value = ''
+}
+
+async function submitLocalFolderForm() {
+  localFolderFormError.value = ''
+  localFolderFormLoading.value = true
+
+  const thpId = localFolderForm.value.tahapan_id
+  if (!thpId) {
+    localFolderFormError.value = 'Silakan pilih tahapan untuk folder ini.'
+    localFolderFormLoading.value = false
+    return
+  }
+
+  try {
+    if (editingLocalFolder.value) {
+      await axios.put(`${API}/tahapan/${editingLocalFolder.value.tahapan_id}/folders/${editingLocalFolder.value.id}`, {
+        nama_folder: localFolderForm.value.nama_folder
+      })
+      showToast('Nama folder berhasil diperbarui.', 'success')
+    } else {
+      await axios.post(`${API}/tahapan/${thpId}/folders`, {
+        nama_folder: localFolderForm.value.nama_folder
+      })
+      showToast('Folder lokal berhasil dibuat di direktori server.', 'success')
+    }
+    closeLocalFolderModal()
+    await Promise.all([fetchTahapan(), fetchLocalFolders(), fetchLocalFiles()])
+  } catch (err) {
+    localFolderFormError.value = err.response?.data?.error || 'Gagal menyimpan folder.'
+  } finally {
+    localFolderFormLoading.value = false
+  }
+}
+
+function confirmDeleteLocalFolder(folder) {
+  deletingLocalFolder.value = folder
+  folderDeleteData.value = null
+}
+
+async function executeDeleteLocalFolder(force = false) {
+  if (!deletingLocalFolder.value) return
+  localFolderFormLoading.value = true
+  try {
+    const url = `${API}/tahapan/${deletingLocalFolder.value.tahapan_id}/folders/${deletingLocalFolder.value.id}${force ? '?force=1' : ''}`
+    await axios.delete(url)
+    showToast('Folder lokal dan isinya berhasil dihapus.', 'success')
+    deletingLocalFolder.value = null
+    folderDeleteData.value = null
+    await Promise.all([fetchTahapan(), fetchLocalFolders(), fetchLocalFiles()])
+  } catch (err) {
+    if (err.response?.status === 409 && err.response?.data?.needs_confirm) {
+      folderDeleteData.value = err.response.data
+    } else {
+      showToast(err.response?.data?.error || 'Gagal menghapus folder.', 'error')
+    }
+  } finally {
+    localFolderFormLoading.value = false
+  }
+}
+
+function filterFilesByFolder(folder) {
+  selectedLocalFolderFilter.value = folder.nama_folder
+  const el = document.querySelector('.section-local-files')
+  if (el) el.scrollIntoView({ behavior: 'smooth' })
+}
+
+function triggerFolderUpload(folder) {
+  targetFolderUpload.value = folder
+  if (folderFileInputRef.value) {
+    folderFileInputRef.value.click()
+  }
+}
+
+async function handleFolderUploadChange(event) {
+  const files = event.target.files
+  if (!files || files.length === 0 || !targetFolderUpload.value) return
+  const folder = targetFolderUpload.value
+  uploadingLocal.value = true
+  showToast(`Mengunggah ${files.length} file ke folder "${folder.nama_folder}"...`, 'info')
+
+  try {
+    const formData = new FormData()
+    formData.append('bidang_id', currentBidang.value.id)
+    formData.append('tahapan_id', folder.tahapan_id)
+    formData.append('folder_path', folder.nama_folder)
+    for (const f of files) formData.append('files', f)
+
+    await axios.post(`${API}/local-files/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    showToast(`${files.length} file berhasil diunggah ke folder "${folder.nama_folder}".`, 'success')
+    event.target.value = ''
+    targetFolderUpload.value = null
+    await Promise.all([fetchTahapan(), fetchLocalFolders(), fetchLocalFiles()])
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Gagal mengunggah file.', 'error')
+  } finally {
+    uploadingLocal.value = false
+  }
+}
+
+// ─── SALIN DARI GOOGLE DRIVE KE SERVER LOKAL ───────────────────────────────
+function openImportGDriveModal(prefillTahapanId = null) {
+  let defaultTahapan = ''
+  if (typeof prefillTahapanId === 'string' && prefillTahapanId) {
+    defaultTahapan = prefillTahapanId
+  } else if (selectedTahapanFilter.value && selectedTahapanFilter.value !== 'all' && selectedTahapanFilter.value !== 'umum') {
+    defaultTahapan = selectedTahapanFilter.value
+  } else if (tahapanList.value.length > 0) {
+    defaultTahapan = tahapanList.value[0].id
+  }
+  importGDriveForm.value = { drive_url_or_id: '', tahapan_id: defaultTahapan, folder_name: '' }
+  inspectedDriveInfo.value = null
+  importError.value = ''
+  showImportGDriveModal.value = true
+}
+
+function openImportForDriveLink(link) {
+  openImportGDriveModal(link.tahapan_id)
+  importGDriveForm.value.drive_url_or_id = link.drive_folder_url || link.drive_folder_id
+  importGDriveForm.value.folder_name = link.nama_folder
+  inspectDriveLink()
+}
+
+function closeImportGDriveModal() {
+  if (importingGDrive.value) return
+  showImportGDriveModal.value = false
+  inspectedDriveInfo.value = null
+  importError.value = ''
+}
+
+async function inspectDriveLink() {
+  if (!importGDriveForm.value.drive_url_or_id) return
+  inspectingDrive.value = true
+  importError.value = ''
+  inspectedDriveInfo.value = null
+  try {
+    const res = await axios.post(`${API}/gdrive-import/inspect`, {
+      drive_url_or_id: importGDriveForm.value.drive_url_or_id
+    })
+    inspectedDriveInfo.value = res.data
+    if (!importGDriveForm.value.folder_name && res.data.name) {
+      importGDriveForm.value.folder_name = res.data.name
+    }
+  } catch (err) {
+    importError.value = err.response?.data?.error || 'Gagal memeriksa tautan Google Drive.'
+  } finally {
+    inspectingDrive.value = false
+  }
+}
+
+async function startImportGDrive() {
+  if (!importGDriveForm.value.drive_url_or_id) {
+    importError.value = 'URL atau ID Google Drive wajib diisi.'
+    return
+  }
+  importingGDrive.value = true
+  importError.value = ''
+
+  try {
+    const res = await axios.post(`${API}/gdrive-import/copy`, {
+      drive_url_or_id: importGDriveForm.value.drive_url_or_id,
+      bidang_id: currentBidang.value.id,
+      tahapan_id: importGDriveForm.value.tahapan_id || undefined,
+      folder_name: importGDriveForm.value.folder_name || undefined
+    })
+
+    const jobId = res.data.jobId
+    showToast('Proses penyalinan file dari Google Drive sedang berjalan...', 'info')
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const jobRes = await axios.get(`${API}/gdrive-import/job/${jobId}`)
+        const job = jobRes.data.job
+        if (job.status === 'completed') {
+          clearInterval(pollInterval)
+          importingGDrive.value = false
+          showToast(`Berhasil menyalin ${job.copiedFiles} file dari Google Drive ke server lokal!`, 'success')
+          closeImportGDriveModal()
+          await Promise.all([fetchTahapan(), fetchLocalFolders(), fetchLocalFiles()])
+        } else if (job.status === 'failed') {
+          clearInterval(pollInterval)
+          importingGDrive.value = false
+          importError.value = job.error || 'Penyalinan gagal.'
+        }
+      } catch (pollErr) {
+        clearInterval(pollInterval)
+        importingGDrive.value = false
+        importError.value = 'Gagal memantau proses penyalinan.'
+      }
+    }, 2000)
+
+  } catch (err) {
+    importingGDrive.value = false
+    importError.value = err.response?.data?.error || 'Gagal memulai penyalinan dari Google Drive.'
   }
 }
 
@@ -1155,7 +1684,7 @@ function showToast(message, type = 'success') {
 // Lifecycle
 async function loadAllData() {
   await fetchBidangs()
-  await Promise.all([fetchDriveLinks(), fetchTahapan(), fetchLocalFiles()])
+  await Promise.all([fetchDriveLinks(), fetchTahapan(), fetchLocalFolders(), fetchLocalFiles()])
 }
 
 onMounted(async () => {

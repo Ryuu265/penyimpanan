@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const db = require('../db');
+const pool = require('../db');
 const JWT_SECRET = process.env.JWT_SECRET || 'pusat-data-bapperida-secret-2025';
 
 function generateToken(user) {
@@ -16,7 +16,7 @@ function generateToken(user) {
   );
 }
 
-function verifyToken(req, res, next) {
+async function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Token tidak ditemukan. Silakan login.' });
@@ -24,7 +24,8 @@ function verifyToken(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     // Selalu ambil profil terbaru dari DB agar perubahan bidang/role langsung sinkron tanpa stale token
-    const freshUser = db.prepare('SELECT id, nama, username, email, role, bidang_id, active FROM users WHERE id = ?').get(decoded.id);
+    const { rows } = await pool.query('SELECT id, nama, username, email, role, bidang_id, active FROM users WHERE id = $1', [decoded.id]);
+    const freshUser = rows[0];
     if (!freshUser || !freshUser.active) {
       return res.status(401).json({ error: 'Akun tidak ditemukan atau telah dinonaktifkan.' });
     }

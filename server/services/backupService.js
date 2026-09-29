@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
-const db = require('../db');
+const pool = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const {
   getHotStoragePath,
@@ -13,10 +13,9 @@ const {
 
 /**
  * Buat backup penuh sistem lokal:
- * - database SQLite (pusat_data.db)
+ * - database SQLite (jika ada file lokal)
  * - Hot Storage folder
  * - Archive Storage folder
- * Catatan: Google Drive hanya berupa metadata di database SQLite sehingga otomatis tercakup tanpa mendownload drive file.
  */
 function createFullBackup(createdBy = 'system', type = 'daily') {
   return new Promise(async (resolve, reject) => {
@@ -39,25 +38,25 @@ function createFullBackup(createdBy = 'system', type = 'daily') {
           const checksum = await calculateChecksum(fullBackupPath);
           const backupId = 'bck-' + uuidv4().slice(0, 8);
 
-          db.prepare(`
+          await pool.query(`
             INSERT INTO backups (id, filename, filepath, size, checksum, type, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `).run(backupId, filename, filename, stat.size, checksum, type, createdBy);
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `, [backupId, filename, filename, stat.size, checksum, type, createdBy]);
 
           // Log aktivitas
-          db.prepare(`
+          await pool.query(`
             INSERT INTO activity_logs (id, user_id, user_nama, aksi, detail)
-            VALUES (?, ?, ?, ?, ?)
-          `).run(
+            VALUES ($1, $2, $3, $4, $5)
+          `, [
             uuidv4(),
             createdBy,
             createdBy === 'system' ? 'Sistem Backup' : 'Super Admin',
             'BACKUP_DATABASE',
             `Backup selesai: ${filename} (${stat.size} bytes)`
-          );
+          ]);
 
           // Jalankan rotasi retensi (7 harian, 4 mingguan)
-          applyRetentionPolicy();
+          await applyRetentionPolicy();
 
           resolve({
             id: backupId,
@@ -74,7 +73,7 @@ function createFullBackup(createdBy = 'system', type = 'daily') {
       archive.on('error', err => reject(err));
       archive.pipe(output);
 
-      // 1. Masukkan Database SQLite (pusat_data.db)
+      // 1. Masukkan Database SQLite jika masih ada file lama
       const dbPath = path.resolve(process.cwd(), 'pusat_data.db');
       if (fs.existsSync(dbPath)) {
         archive.file(dbPath, { name: 'database/pusat_data.db' });
@@ -103,17 +102,17 @@ function createFullBackup(createdBy = 'system', type = 'daily') {
  * Aturan Retensi (Retention Policy):
  * Default: 7 harian, 4 mingguan
  */
-function applyRetentionPolicy() {
+async function applyRetentionPolicy() {
   try {
-    const settingDays = db.prepare("SELECT value FROM settings WHERE key = 'backup_retention_days'").get();
-    const settingWeeks = db.prepare("SELECT value FROM settings WHERE key = 'backup_retention_weeks'").get();
+    const { rows: dRows } = await pool.query("SELECT value FROM settings WHERE key = 'backup_retention_days'");
+    const { rows: wRows } = await pool.query("SELECT value FROM settings WHERE key = 'backup_retention_weeks'");
 
-    const maxDays = parseInt(settingDays?.value || '7', 10);
-    const maxWeeks = parseInt(settingWeeks?.value || '4', 10);
+    const maxDays = parseInt(dRows[0]?.value || '7', 10);
+    const maxWeeks = parseInt(wRows[0]?.value || '4', 10);
 
     const maxKeepTotal = maxDays + maxWeeks;
 
-    const allBackups = db.prepare('SELECT * FROM backups ORDER BY created_at DESC').all();
+    const { rows: allBackups } = await pool.query('SELECT * FROM backups ORDER BY created_at DESC');
     if (allBackups.length > maxKeepTotal) {
       const toDelete = allBackups.slice(maxKeepTotal);
       const backupDir = getBackupStoragePath();
@@ -123,7 +122,7 @@ function applyRetentionPolicy() {
         if (fs.existsSync(p)) {
           try { fs.unlinkSync(p); } catch (_) {}
         }
-        db.prepare('DELETE FROM backups WHERE id = ?').run(b.id);
+        await pool.query('DELETE FROM backups WHERE id = $1', [b.id]);
       }
     }
   } catch (err) {

@@ -7,9 +7,9 @@ const keepAliveService = require('../services/keepAlive');
 router.use(verifyToken, requireAdminOrAbove);
 
 // GET /api/admin/keepalive/status
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   try {
-    const status = keepAliveService.getStatus();
+    const status = await keepAliveService.getStatus();
     res.json({ success: true, data: status });
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil status keep-alive: ' + err.message });
@@ -17,13 +17,13 @@ router.get('/status', (req, res) => {
 });
 
 // POST /api/admin/keepalive/toggle
-router.post('/toggle', (req, res) => {
+router.post('/toggle', async (req, res) => {
   try {
     const { active } = req.body;
     if (active === undefined) {
       return res.status(400).json({ error: 'Parameter active (true/false) diperlukan.' });
     }
-    const updated = keepAliveService.updateConfig({ active: !!active });
+    const updated = await keepAliveService.updateConfig({ active: !!active });
     res.json({ success: true, message: `Auto-reset berhasil di-${active ? 'aktifkan' : 'nonaktifkan'}.`, data: updated });
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengubah status keep-alive: ' + err.message });
@@ -31,10 +31,10 @@ router.post('/toggle', (req, res) => {
 });
 
 // POST /api/admin/keepalive/config
-router.post('/config', (req, res) => {
+router.post('/config', async (req, res) => {
   try {
     const { active, interval_minutes, schedule_enabled, work_start, work_end } = req.body;
-    const updated = keepAliveService.updateConfig({
+    const updated = await keepAliveService.updateConfig({
       active,
       interval_minutes,
       schedule_enabled,
@@ -51,7 +51,7 @@ router.post('/config', (req, res) => {
 router.post('/ping', async (req, res) => {
   try {
     const result = await keepAliveService.performPing(true);
-    const updated = keepAliveService.getStatus();
+    const updated = await keepAliveService.getStatus();
     res.json({ success: result.success, message: result.success ? 'Ping berhasil dikirim.' : 'Ping gagal.', pingResult: result, data: updated });
   } catch (err) {
     res.status(500).json({ error: 'Gagal menjalankan ping: ' + err.message });
