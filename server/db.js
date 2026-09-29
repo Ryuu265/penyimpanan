@@ -2,7 +2,11 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const DB_PATH = path.join(__dirname, 'pusat_data.db');
+const fs = require('fs');
+
+// Lokasi database bisa diatur lewat env DB_PATH (mis. /data/pusat_data.db di Railway Volume)
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'pusat_data.db');
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 const db = new Database(DB_PATH);
 
 // Enable WAL mode for better performance
@@ -108,6 +112,19 @@ db.exec(`
     type TEXT NOT NULL DEFAULT 'daily',
     created_by TEXT NOT NULL DEFAULT 'system',
     created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS local_folders (
+    id TEXT PRIMARY KEY,
+    tahun_id TEXT REFERENCES tahun(id) ON DELETE SET NULL,
+    bidang_id TEXT NOT NULL REFERENCES bidang(id) ON DELETE CASCADE,
+    tahapan_id TEXT REFERENCES tahapan(id) ON DELETE CASCADE,
+    nama_folder TEXT NOT NULL,
+    relative_path TEXT NOT NULL,
+    dibuat_oleh TEXT NOT NULL,
+    user_id TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
   );
 `);
 
