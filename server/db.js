@@ -130,10 +130,11 @@ async function initDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL
   `);
 
-  // ─── Hapus data dummy ──────────────────────────────────────────────────
+  // ─── Hapus data dummy (kecuali superadmin) ───────────────────────────────
   try {
+    await pool.query("DELETE FROM users WHERE role != 'SUPER_ADMIN' AND id != 'user-super-001'");
     await pool.query("DELETE FROM drive_links WHERE drive_folder_id LIKE 'mock-%' OR id LIKE 'link-%'");
-    await pool.query("DELETE FROM activity_logs WHERE target_link_id LIKE 'link-%'");
+    await pool.query("DELETE FROM activity_logs WHERE target_link_id LIKE 'link-%' OR user_id IN ('user-admin-perencanaan', 'user-admin-palev', 'user-viewer-001')");
   } catch (_) { /* Abaikan jika sudah bersih */ }
 
   // ─── Seed functions ────────────────────────────────────────────────────
@@ -146,35 +147,13 @@ async function initDb() {
   console.log('✅ PostgreSQL database initialized');
 }
 
-// ─── Seed: user & bidang default ─────────────────────────────────────────────
+// ─── Seed: hanya Super Admin default ─────────────────────────────────────────
 async function seed() {
-  const { rows } = await pool.query('SELECT COUNT(*) AS c FROM users');
-  if (parseInt(rows[0].c, 10) > 0) return;
-
-  const bidang1Id = 'bidang-perencanaan-001';
-  const bidang2Id = 'bidang-palev-002';
-
-  await pool.query(
-    'INSERT INTO bidang (id, nama_bidang) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
-    [bidang1Id, 'Perencanaan']
-  );
-  await pool.query(
-    'INSERT INTO bidang (id, nama_bidang) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
-    [bidang2Id, 'Pengendalian & Evaluasi (Palev)']
-  );
-
   const hashSuperAdmin = bcrypt.hashSync('superadmin123', 10);
-  const hashAdmin1 = bcrypt.hashSync('admin123', 10);
-  const hashAdmin2 = bcrypt.hashSync('admin123', 10);
-  const hashViewer = bcrypt.hashSync('viewer123', 10);
-
   const insertUser = 'INSERT INTO users (id, nama, username, email, password, role, bidang_id) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING';
   await pool.query(insertUser, ['user-super-001', 'Super Admin', 'superadmin', 'superadmin@bapperida.go.id', hashSuperAdmin, 'SUPER_ADMIN', null]);
-  await pool.query(insertUser, ['user-admin-perencanaan', 'Admin Perencanaan', 'admin.perencanaan', 'admin.perencanaan@bapperida.go.id', hashAdmin1, 'ADMIN_BIDANG', bidang1Id]);
-  await pool.query(insertUser, ['user-admin-palev', 'Admin Palev', 'admin.palev', 'admin.palev@bapperida.go.id', hashAdmin2, 'ADMIN_BIDANG', bidang2Id]);
-  await pool.query(insertUser, ['user-viewer-001', 'Pegawai Umum', 'pegawai', 'pegawai@bapperida.go.id', hashViewer, 'VIEWER', null]);
 
-  console.log('✅ Database seeded successfully');
+  console.log('✅ Super Admin seeded successfully');
 }
 
 async function seedTahun() {
@@ -182,6 +161,14 @@ async function seedTahun() {
   await pool.query(
     'INSERT INTO tahun (id, nama, label, urutan) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
     [defaultTahunId, '2025', 'Tahun Anggaran 2025', 0]
+  );
+  await pool.query(
+    'INSERT INTO bidang (id, nama_bidang, tahun_id) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING',
+    ['bidang-perencanaan-001', 'Perencanaan', defaultTahunId]
+  );
+  await pool.query(
+    'INSERT INTO bidang (id, nama_bidang, tahun_id) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING',
+    ['bidang-palev-002', 'Pengendalian & Evaluasi (Palev)', defaultTahunId]
   );
   await pool.query(
     "UPDATE bidang SET tahun_id = $1 WHERE tahun_id IS NULL OR tahun_id = ''",
@@ -250,18 +237,9 @@ async function seedSettings() {
 }
 
 async function migrateUsername() {
-  const defaults = [
-    { id: 'user-super-001', username: 'superadmin' },
-    { id: 'user-admin-perencanaan', username: 'admin.perencanaan' },
-    { id: 'user-admin-palev', username: 'admin.palev' },
-    { id: 'user-viewer-001', username: 'pegawai' },
-  ];
-  for (const u of defaults) {
-    await pool.query(
-      "UPDATE users SET username = $1 WHERE id = $2 AND (username IS NULL OR username = '')",
-      [u.username, u.id]
-    );
-  }
+  await pool.query(
+    "UPDATE users SET username = 'superadmin' WHERE id = 'user-super-001' AND (username IS NULL OR username = '')"
+  );
 }
 
 module.exports = pool;

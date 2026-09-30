@@ -215,29 +215,6 @@
       </div>
     </section>
 
-    <!-- Tab: Demo Accounts / Testing -->
-    <section v-if="activeTab === 'demo'" class="section">
-      <div class="section-title-row">
-        <div>
-          <h2>🎯 Akun Testing & Demo (Internal)</h2>
-          <p class="caption">Daftar kredensial akun bawaan untuk keperluan verifikasi dan testing internal sistem.</p>
-        </div>
-      </div>
-      <div class="demo-admin-grid">
-        <div v-for="acc in internalDemoAccounts" :key="acc.email" class="demo-admin-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-            <strong>{{ acc.role }}</strong>
-            <span class="badge" :class="acc.badgeClass">{{ acc.role }}</span>
-          </div>
-          <p class="caption" style="margin-bottom:0.3rem;">Email: <code>{{ acc.email }}</code></p>
-          <p class="caption" style="margin-bottom:0.8rem;">Password: <code>{{ acc.password }}</code></p>
-          <button class="btn btn-outline btn-sm" @click="copyCredentials(acc)">
-            📋 Salin Kredensial
-          </button>
-        </div>
-      </div>
-    </section>
-
     <!-- Modal: Bidang -->
     <Teleport to="body">
       <div v-if="showBidangModal" class="modal-overlay" @click.self="showBidangModal=false">
@@ -377,7 +354,6 @@ const tabs = [
   { key: 'users', label: 'Manajemen User' },
   { key: 'bidang', label: 'Manajemen Bidang' },
   { key: 'keepalive', label: 'Auto-Reset / Keep-Alive' },
-  { key: 'demo', label: 'Akun Testing' },
 ]
 
 function getInitialTab() {
@@ -428,13 +404,6 @@ const keepaliveForm = ref({
   work_end: '17:00',
   interval_minutes: 10,
 })
-
-const internalDemoAccounts = [
-  { role: 'Super Admin', email: 'superadmin@bapperida.go.id', password: 'superadmin123', badgeClass: 'badge-super' },
-  { role: 'Admin Perencanaan', email: 'admin.perencanaan@bapperida.go.id', password: 'admin123', badgeClass: 'badge-admin' },
-  { role: 'Admin Palev', email: 'admin.palev@bapperida.go.id', password: 'admin123', badgeClass: 'badge-admin' },
-  { role: 'Viewer', email: 'pegawai@bapperida.go.id', password: 'viewer123', badgeClass: 'badge-viewer' },
-]
 
 // Modal state
 const showBidangModal = ref(false)
@@ -522,11 +491,6 @@ async function triggerPing() {
   } finally {
     pinging.value = false
   }
-}
-
-function copyCredentials(acc) {
-  navigator.clipboard.writeText(`Email: ${acc.email}\nPassword: ${acc.password}`)
-  showToast(`Kredensial ${acc.role} disalin ke clipboard!`, 'success')
 }
 
 // Bidang CRUD
@@ -793,21 +757,6 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 1rem;
-}
-.demo-admin-card {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-}
-.demo-admin-card code {
-  background: var(--color-surface);
-  padding: 0.15rem 0.35rem;
-  border-radius: 4px;
-  border: 1px solid var(--color-border);
-  font-size: 0.78rem;
 }
 
 .error-alert {
